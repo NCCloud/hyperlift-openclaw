@@ -1,0 +1,19 @@
+# Environment secrets
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Node
+node_modules/
+package-lock.json

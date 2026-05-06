@@ -1,0 +1,44 @@
+{
+  "gateway": {
+    "mode": "local",
+    "port": 3001,
+    "bind": "lan",
+    "auth": {
+      "mode": "password"
+    },
+    "controlUi": {
+      "allowInsecureAuth": true,
+      "allowedOrigins": ["${PUBLIC_ORIGIN}", "http://localhost"],
+      "dangerouslyDisableDeviceAuth": true
+    }
+  },
+
+  "agents": {
+    "defaults": {
+      "workspace": "/home/node/.openclaw/workspace",
+      "model": {
+        "primary": "openai/gpt-5.4"
+      },
+      "sandbox": {
+        "mode": "off"
+      }
+    }
+  },
+  "update": {
+    "checkOnStart": false
+  },
+  "browser": {
+    "enabled": true,
+    "headless": true,
+    "noSandbox": true
+  },
+  "hooks": {
+    "internal": {
+      "entries": {
+        "sync-status-inject": {
+          "enabled": true
+        }
+      }
+    }
+  }
+}
