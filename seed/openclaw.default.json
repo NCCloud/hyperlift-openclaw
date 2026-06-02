@@ -8,8 +8,8 @@
     },
     "controlUi": {
       "allowInsecureAuth": true,
-      "allowedOrigins": ["${PUBLIC_ORIGIN}", "http://localhost"],
-      "dangerouslyDisableDeviceAuth": true
+      "dangerouslyDisableDeviceAuth": true,
+      "dangerouslyAllowHostHeaderOriginFallback": true
     }
   },
 
@@ -26,6 +26,11 @@
   },
   "update": {
     "checkOnStart": false
+  },
+  "discovery": {
+    "mdns": {
+      "mode": "off"
+    }
   },
   "browser": {
     "enabled": true,
