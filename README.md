@@ -34,11 +34,11 @@ Once deployed, open the gateway's URL, sign in with your gateway password, and s
 
 Hyperlift mounts a persistent volume at `/home/node`. The deployment uses OpenClaw's defaults — `OPENCLAW_STATE_DIR=/home/node/.openclaw` and `OPENCLAW_CONFIG_PATH=/home/node/.openclaw/openclaw.json` — so the agent's state lives on that volume, and anything written under `/home/node` at runtime persists across restarts and redeploys.
 
-The same mount has a build-time implication for customizing this template: at runtime the volume mounts over whatever the image has at `/home/node`, so anything a `Dockerfile` `RUN` step writes there — directly or as a side effect — is lost. For example:
+The same mount has a build-time implication for customizing this template: at runtime the volume mounts over whatever the image has at `/home/node`, so anything a `Dockerfile` `RUN` step writes there — directly or as a side effect — is hidden by the mount at runtime. For example:
 
 - `RUN openclaw plugins install clawhub:@openclaw/diagnostics-otel` — writes plugins, extensions, and config under `/home/node/.openclaw`
 - `RUN openclaw skills install calendar` — writes skills to `/home/node/.openclaw/workspace/skills`
-- `RUN npx playwright install --with-deps chromium` — installs Chromium browsers under `/home/node/.cache/ms-playwright` by default and its system dependencies
+- `RUN npx playwright install --with-deps chromium` — installs Chromium browsers under `/home/node/.cache/ms-playwright` by default (the `--with-deps` system packages are installed outside `/home/node`)
 
 Installing ordinary system packages (`jq`, `wget`, `tree`, …) in the `Dockerfile` works as expected — they land outside `/home/node`.
 
