@@ -30,6 +30,24 @@ See the [configuration reference](https://docs.openclaw.ai/gateway/configuration
 
 Once deployed, open the gateway's URL, sign in with your gateway password, and start chatting with your agent.
 
+## Persistent storage
+
+Hyperlift mounts a persistent volume at `/home/node`. The deployment uses OpenClaw's defaults — `OPENCLAW_STATE_DIR=/home/node/.openclaw` and `OPENCLAW_CONFIG_PATH=/home/node/.openclaw/openclaw.json` — so the agent's state lives on that volume, and anything written under `/home/node` at runtime persists across restarts and redeploys.
+
+The same mount has a build-time implication for customizing this template: at runtime the volume mounts over whatever the image has at `/home/node`, so anything a `Dockerfile` `RUN` step writes there — directly or as a side effect — is hidden by the mount at runtime. For example:
+
+- `RUN openclaw plugins install clawhub:@openclaw/diagnostics-otel` — writes plugins, extensions, and config under `/home/node/.openclaw`
+- `RUN openclaw skills install calendar` — writes skills to `/home/node/.openclaw/workspace/skills`
+- `RUN npx playwright install --with-deps chromium` — installs Chromium browsers under `/home/node/.cache/ms-playwright` by default (the `--with-deps` system packages are installed outside `/home/node`)
+
+Installing ordinary system packages (`jq`, `wget`, `tree`, …) in the `Dockerfile` works as expected — they land outside `/home/node`.
+
+To install anything that lives under `/home/node`, do it after the volume is mounted instead:
+
+- **Ask the agent** — it can run the command inside its container with the exec tool.
+- **Use the OpenClaw CLI** against your gateway (see [Connect the OpenClaw CLI](#connect-the-openclaw-cli)) — e.g. `openclaw plugins install …`.
+- **Extend `init.sh`** — it's the entrypoint and runs on every boot after the volume is mounted, so its changes to `/home/node` stick and re-apply even to a fresh volume.
+
 ## Connect the OpenClaw CLI
 
 You can operate your deployed gateway from your own machine with the OpenClaw CLI; a local gateway is not required.
@@ -114,3 +132,4 @@ Then tell the agent `"pull from git"` and it picks up your changes. Ask it to `"
 - **Git sync is not working.** Check the container logs. The most common causes are an expired PAT, an SSH-form URL instead of HTTPS, or a PAT missing **Contents: read and write**. If the remote cannot be reached, the container falls back to local-only mode and keeps running.
 - **The CLI reports `protocol error`.** The CLI and gateway versions differ — install the version this template pins (see [Connect the OpenClaw CLI](#connect-the-openclaw-cli)).
 - **The CLI reports `pairing required` or `scope upgrade pending`.** Approve the device in the control UI under **Nodes → Devices**.
+- **Something installed in the `Dockerfile` is missing at runtime.** If the build wrote it under `/home/node` (plugins, Playwright browsers, caches), the persistent volume mounts over it — install it after boot instead. See [Persistent storage](#persistent-storage).
