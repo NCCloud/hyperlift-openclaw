@@ -1,4 +1,3 @@
-# Pinned for reproducible builds — keep your local CLI on this version (see README).
 FROM ghcr.io/openclaw/openclaw:2026.6.1
 
 COPY --chown=node:node seed/ /app/seed/
