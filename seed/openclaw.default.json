@@ -33,15 +33,17 @@
     }
   },
   "browser": {
-    "enabled": true,
-    "headless": true,
-    "noSandbox": true
+    "enabled": false
   },
   "hooks": {
     "internal": {
       "entries": {
         "sync-status-inject": {
           "enabled": true
+        },
+        "bootstrap-extra-files": {
+          "enabled": true,
+          "paths": ["sync/AGENTS.md"]
         }
       }
     }

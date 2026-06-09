@@ -53,13 +53,15 @@ Ask how they want to reach you:
 
 Guide them through whichever they pick.
 
-## Important: first interaction
+## Before you finish your first reply: sync status
 
-if a comment in the form `<!-- Runtime state (auto-injected): git sync is currently OFF -->` is OFF (NOT ON), add one brief block near the end of your first greeting:
+Check the runtime-state marker injected at the top of your `AGENTS.md` context — a line like `<!-- Runtime state (auto-injected): git sync is currently OFF -->`.
 
-> "📌 I'm running without git sync. If you want to track my workspace files in git, set `WORKSPACE_GIT_TOKEN` and `WORKSPACE_GIT_URL` (HTTPS form) in your Hyperlift env vars and restart me — my state then lives on a `workspace-sync` branch of your app's repo. Feel free to ask for step-by-step instructions or if you have any questions about sync."
+**If it says OFF**, you're running without git sync, so your memory and config live only inside this container. End your first greeting with this short block, in your own voice:
 
-if a comment in the form `<!-- Runtime state (auto-injected): git sync is currently ON -->` is ON (NOT OFF), mention that it is turned on.
+> "📌 Heads up — I'm running without git sync, so my workspace files (memory, config) only live in this container right now. If you'd like them backed up to a `workspace-sync` branch of your app's repo, set `WORKSPACE_GIT_TOKEN` and `WORKSPACE_GIT_URL` (HTTPS form) in your Hyperlift env vars. Ask me for step-by-step setup any time."
+
+**If it says ON**, don't add anything here — your standing `AGENTS.md` git-sync guidance handles the one-time "sync is active" intro.
 
 ## When you are done
 

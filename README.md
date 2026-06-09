@@ -28,6 +28,8 @@ Create a Hyperlift app from this template; Hyperlift builds the container from t
 
 See the [configuration reference](https://docs.openclaw.ai/gateway/configuration) for `openclaw.json` options.
 
+> **Note:** The agent's data lives at `/home/node/.openclaw` on the app's persistent volume. Leave `OPENCLAW_STATE_DIR` at its default — pointing it outside `/home/node` means the data won't survive a restart.
+
 Once deployed, open the gateway's URL, sign in with your gateway password, and start chatting with your agent.
 
 ## Persistent storage
@@ -38,7 +40,6 @@ The same mount has a build-time implication for customizing this template: at ru
 
 - `RUN openclaw plugins install clawhub:@openclaw/diagnostics-otel` — writes plugins, extensions, and config under `/home/node/.openclaw`
 - `RUN openclaw skills install calendar` — writes skills to `/home/node/.openclaw/workspace/skills`
-- `RUN npx playwright install --with-deps chromium` — installs Chromium browsers under `/home/node/.cache/ms-playwright` by default (the `--with-deps` system packages are installed outside `/home/node`)
 
 Installing ordinary system packages (`jq`, `wget`, `tree`, …) in the `Dockerfile` works as expected — they land outside `/home/node`.
 
@@ -55,7 +56,7 @@ You can operate your deployed gateway from your own machine with the OpenClaw CL
 **1. Install the matching version.** The CLI and gateway must run the same OpenClaw version, otherwise the connection fails with a protocol error. See the `Dockerfile`, or the version shown in the control UI. Install that version with npm — Node 24 is recommended and Node 22+ is supported, per the [installation guide](https://docs.openclaw.ai/install):
 
 ```bash
-npm install -g openclaw@2026.5.5
+npm install -g openclaw@2026.6.1
 ```
 
 **2. Point the CLI at your gateway.** Configure [remote gateway mode](https://docs.openclaw.ai/gateway/remote):
@@ -105,7 +106,7 @@ The agent's workspace already persists on the deployment's volume across restart
 
 On first sync, the agent's current workspace becomes the first commit on a new `workspace-sync` branch — a standalone branch that holds only the workspace files, kept separate from your app's code.
 
-**What syncs:** only the agent's `workspace/` directory and its `openclaw.json` configuration. Runtime state — credentials, sessions, and scheduled jobs — stays local to the container and is never committed.
+**What syncs:** the agent's `workspace/` directory, its `openclaw.json` configuration, and `skills/`. Runtime state — credentials, sessions, and scheduled jobs — stays local to the container and is never committed.
 
 > **Do not put secrets in `openclaw.json`.** Because that file is synced to your repository, any API key or token entered into the control UI's configuration or skill fields would be pushed to the branch in plaintext. Keep secrets in your Hyperlift environment variables instead.
 
@@ -132,4 +133,4 @@ Then tell the agent `"pull from git"` and it picks up your changes. Ask it to `"
 - **Git sync is not working.** Check the container logs. The most common causes are an expired PAT, an SSH-form URL instead of HTTPS, or a PAT missing **Contents: read and write**. If the remote cannot be reached, the container falls back to local-only mode and keeps running.
 - **The CLI reports `protocol error`.** The CLI and gateway versions differ — install the version this template pins (see [Connect the OpenClaw CLI](#connect-the-openclaw-cli)).
 - **The CLI reports `pairing required` or `scope upgrade pending`.** Approve the device in the control UI under **Nodes → Devices**.
-- **Something installed in the `Dockerfile` is missing at runtime.** If the build wrote it under `/home/node` (plugins, Playwright browsers, caches), the persistent volume mounts over it — install it after boot instead. See [Persistent storage](#persistent-storage).
+- **Something installed in the `Dockerfile` is missing at runtime.** If the build wrote it under `/home/node` (plugins, skills, caches), the persistent volume mounts over it — install it after boot instead. See [Persistent storage](#persistent-storage).

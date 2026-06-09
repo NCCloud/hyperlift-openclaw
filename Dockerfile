@@ -1,14 +1,10 @@
-FROM ghcr.io/openclaw/openclaw:latest
+# Pinned for reproducible builds — keep your local CLI on this version (see README).
+FROM ghcr.io/openclaw/openclaw:2026.6.1
 
 COPY --chown=node:node seed/ /app/seed/
 COPY --chown=node:node --chmod=0755 init.sh /app/init.sh
 
-# Pre-create the state dir with node ownership so a named volume mounted here
-# inherits it. Without this, Docker creates the mount point as root on first
-# attach, and init.sh (running as node) hits EACCES when writing.
-USER root
-RUN mkdir -p /home/node/.openclaw && chown node:node /home/node/.openclaw
-USER node
-
-ENTRYPOINT ["/app/init.sh"]
+# The base image already runs under tini as PID 1; we just point its entrypoint
+# at init.sh, which prepares the state dir / git sync and then execs the gateway.
+ENTRYPOINT ["tini", "-s", "--", "/app/init.sh"]
 CMD ["openclaw", "gateway", "run"]

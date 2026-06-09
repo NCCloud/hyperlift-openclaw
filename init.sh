@@ -1,170 +1,152 @@
-#!/usr/bin/env sh
-set -eu
+#!/usr/bin/env bash
+#
+# Container entrypoint. Prepares the OpenClaw state dir and, when
+# WORKSPACE_GIT_TOKEN + WORKSPACE_GIT_URL are set, syncs it to a `workspace-sync`
+# git branch; then execs the gateway. See BOOT-SCENARIOS.md for the boot paths.
+#
+# STATE_DIR must stay under the persistent volume (mounted at /home/node) — don't
+# point OPENCLAW_STATE_DIR elsewhere, or the agent's state won't survive restarts.
 
-STATE_DIR="/home/node/.openclaw"
-PRE_SYNC="/home/node/.openclaw-pre-sync"
+set -uo pipefail
+
+STATE_DIR="${OPENCLAW_STATE_DIR:-/home/node/.openclaw}"
 SEED_CONFIG="/app/seed/openclaw.default.json"
 SEED_WORKSPACE="/app/seed/workspace"
 SEED_GITIGNORE="/app/seed/workspace-sync.gitignore"
+SEED_SKILLS="/app/seed/skills"
 
-# ───── helpers ─────────────────────────────────────────────────────────
+log()  { printf 'init: %s\n'          "$*" >&2; }
+warn() { printf 'init: WARNING: %s\n' "$*" >&2; }
 
-# Configure git to authenticate over HTTPS with the user's PAT.
+have_sync_env() {
+  [ -n "${WORKSPACE_GIT_TOKEN:-}" ] && [ -n "${WORKSPACE_GIT_URL:-}" ]
+}
+
+# Store the PAT for HTTPS git auth (github.com-scoped, 0600). It persists on the
+# volume, so runtime git keeps working without the env var.
 setup_credentials() {
-  git config --global user.name "openclaw-agent"
-  git config --global user.email "agent@openclaw.local"
-  git config --global credential.helper store
-  printf 'https://x-access-token:%s@github.com\n' "$WORKSPACE_GIT_TOKEN" > ~/.git-credentials
-  chmod 600 ~/.git-credentials
+  git config --global user.name "openclaw-agent" || return 1
+  git config --global user.email "agent@openclaw.local" || return 1
+  git config --global credential.helper store || return 1
+  printf 'https://x-access-token:%s@github.com\n' "$WORKSPACE_GIT_TOKEN" > ~/.git-credentials || return 1
+  chmod 600 ~/.git-credentials || return 1
 }
 
-# First-sync transition: move pre-existing local-only state aside so STATE_DIR
-# is empty for git clone. PRE_SYNC must live on the same persistent volume.
-stash_existing_state() {
-  if [ -n "$(ls -A . 2>/dev/null)" ]; then
-    mkdir -p "$PRE_SYNC"
-    find . -mindepth 1 -maxdepth 1 -exec mv {} "$PRE_SYNC/" \;
-  fi
+clear_credentials() { rm -f ~/.git-credentials; }
+
+# Seed the git-sync skill into the managed skills dir ($STATE_DIR/skills), a
+# sibling of workspace/ — a skill inside workspace/ would make OpenClaw skip the
+# first-run ritual.
+seed_managed_skills() {
+  [ -d "$SEED_SKILLS" ] || return 0
+  [ -d "$STATE_DIR/skills" ] && return 0
+  cp -r "$SEED_SKILLS" "$STATE_DIR/skills" || { warn "could not seed the git-sync skill"; return 1; }
 }
 
-# After successful clone: restore runtime state (credentials/, agents/, cron/)
-# to STATE_DIR. Skip workspace + openclaw.json — clone is canonical for those,
-# and any local workspace state is preserved on a remote backup branch already.
-restore_stashed_runtime_state() {
-  [ -d "$PRE_SYNC" ] || return 0
-  for item in "$PRE_SYNC"/*; do
-    [ -e "$item" ] || continue
-    name=$(basename "$item")
-    case "$name" in
-      workspace|openclaw.json) ;;
-      *) mv "$item" "./$name" ;;
-    esac
-  done
-  rm -rf "$PRE_SYNC"
+# No sync: seed workspace/ + openclaw.json + the skill if missing so the gateway can boot.
+seed_local_only() {
+  mkdir -p "$STATE_DIR" || return 1
+  cd "$STATE_DIR" || return 1
+  [ -f openclaw.json ] || cp    "$SEED_CONFIG"    openclaw.json || return 1
+  [ -d workspace     ] || cp -r "$SEED_WORKSPACE" workspace     || return 1
+  seed_managed_skills         
+  log "local-only mode — no git sync"
 }
 
-# Failure path: clone didn't succeed. Put everything back verbatim and nuke
-# any partial .git so the next boot can retry from a clean slate.
-restore_stashed_state_full() {
-  rm -rf .git
-  [ -d "$PRE_SYNC" ] || return 0
-  find "$PRE_SYNC" -mindepth 1 -maxdepth 1 -exec mv {} ./ \;
-  rm -rf "$PRE_SYNC"
+has_local_state() { [ -d workspace ] || [ -f openclaw.json ]; }
+
+# Branch exists AND we have local workspace/openclaw.json: commit and push them to
+# a local-backup-<ts> branch before adopting the remote, so nothing is lost.
+preserve_local_to_backup() {
+  has_local_state || return 0
+  local ts; ts="$(date -u +%Y%m%dT%H%M%SZ)"
+  cp "$SEED_GITIGNORE" .gitignore || return 1
+  [ -d workspace     ] && { git add workspace     || return 1; }
+  [ -f openclaw.json ] && { git add openclaw.json || return 1; }
+  git add .gitignore || return 1
+  git diff --cached --quiet && return 0
+  git commit -q -m "local state before sync ($ts)" || return 1
+  git push -q origin "HEAD:refs/heads/local-backup-$ts" || return 1
+  log "backed up prior local state to branch local-backup-$ts"
 }
 
-# Branch-exists path: snapshot stashed local workspace + openclaw.json to a
-# timestamped local-backup-<ts> branch on the remote so the user can recover
-# via the GitHub UI without exec access. Excludes runtime state by selecting
-# only those two paths. No-op if there's nothing local to back up.
-push_local_to_backup_branch() {
-  if [ ! -d "$PRE_SYNC/workspace" ] && [ ! -f "$PRE_SYNC/openclaw.json" ]; then
-    return 0
-  fi
-  ts=$(date -u +%Y%m%dT%H%M%SZ)
-  tmp="/tmp/openclaw-backup-$$"
-  mkdir -p "$tmp"
-  [ -d "$PRE_SYNC/workspace"     ] && cp -r "$PRE_SYNC/workspace"     "$tmp/workspace"
-  [ -f "$PRE_SYNC/openclaw.json" ] && cp    "$PRE_SYNC/openclaw.json" "$tmp/openclaw.json"
-  rc=0
-  (
-    cd "$tmp"
-    git init -q -b "local-backup-$ts"
-    git remote add origin "$WORKSPACE_GIT_URL"
-    [ -d workspace     ] && git add workspace
-    [ -f openclaw.json ] && git add openclaw.json
-    git diff --cached --quiet && exit 0
-    git commit -q -m "local state before sync ($ts)"
-    git push -q -u origin "local-backup-$ts"
-  ) || rc=$?
-  rm -rf "$tmp"
-  return $rc
+# Adopt the canonical remote branch (untracked runtime state is left alone).
+adopt_remote_sync() {
+  git fetch -q origin workspace-sync:refs/remotes/origin/workspace-sync || return 1
+  git checkout -q -B workspace-sync origin/workspace-sync || return 1
 }
 
-# Branch-exists path: clone the canonical workspace-sync from the remote.
-clone_workspace_sync() {
-  git clone -b workspace-sync --single-branch "$WORKSPACE_GIT_URL" . 2>/dev/null
+# Branch missing: create it as an orphan from the local workspace/openclaw.json
+# if present, else from the seed.
+create_orphan_sync() {
+  git checkout -q -b workspace-sync || return 1
+  cp "$SEED_GITIGNORE" .gitignore || return 1
+  { [ -f openclaw.json ] || cp    "$SEED_CONFIG"    openclaw.json; } || return 1
+  { [ -d workspace     ] || cp -r "$SEED_WORKSPACE" workspace;     } || return 1
+  seed_managed_skills || return 1          # include the skill in the first commit
+  git add .gitignore workspace openclaw.json || return 1
+  [ -d skills ] && { git add skills || return 1; }
+  git commit -q -m "bootstrap workspace-sync" || return 1
+  git push -q -u origin workspace-sync || return 1
 }
 
-# Branch-missing path: clone the default branch, then create workspace-sync
-# from stashed local state (or seed if no local state). Local IS canonical
-# here since there's no remote workspace-sync to preserve.
-create_workspace_sync() {
-  git clone "$WORKSPACE_GIT_URL" . 2>/dev/null || return 1
-  git checkout -q -b workspace-sync
-  cp "$SEED_GITIGNORE" .gitignore
-  if [ -f "$PRE_SYNC/openclaw.json" ]; then
-    mv "$PRE_SYNC/openclaw.json" openclaw.json
-  else
-    cp "$SEED_CONFIG" openclaw.json
-  fi
-  if [ -d "$PRE_SYNC/workspace" ]; then
-    mv "$PRE_SYNC/workspace" workspace
-  else
-    cp -r "$SEED_WORKSPACE" workspace
-  fi
-  git add .gitignore workspace openclaw.json
-  git commit -q -m "bootstrap workspace-sync"
-  git push   -q -u origin workspace-sync
-}
-
-# Top-level sync orchestrator: short-circuits if .git already exists, probes
-# the remote with a single ls-remote call to distinguish branch-exists vs
-# branch-missing vs unreachable, and unwinds on any failure.
+# Set sync up in place: fast-path a healthy clone, else probe and adopt/create.
 setup_sync() {
-  cd "$STATE_DIR"
+  mkdir -p "$STATE_DIR" || return 1
+  cd "$STATE_DIR" || return 1
+
   if [ -d .git ]; then
-    [ "$(git remote get-url origin 2>/dev/null)" = "$WORKSPACE_GIT_URL" ] \
-      || git remote set-url origin "$WORKSPACE_GIT_URL"
-    return 0
+    if git rev-parse --verify -q refs/heads/workspace-sync >/dev/null 2>&1; then
+      [ "$(git remote get-url origin 2>/dev/null || true)" = "$WORKSPACE_GIT_URL" ] \
+        || { git remote set-url origin "$WORKSPACE_GIT_URL" || return 1; }
+      log "sync already configured"
+      return 0
+    fi
+    warn "incomplete .git from an interrupted boot — re-initializing"
+    rm -rf .git
   fi
-  # 0 = workspace-sync exists, 2 = doesn't exist, other = unreachable.
-  git ls-remote --exit-code --quiet "$WORKSPACE_GIT_URL" workspace-sync >/dev/null 2>&1
-  rc=$?
+
+  # rc: 0 = branch exists, 2 = missing, anything else = unreachable.
+  local rc=0
+  git ls-remote --exit-code --quiet "$WORKSPACE_GIT_URL" workspace-sync >/dev/null 2>&1 || rc=$?
   if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then
+    warn "cannot reach $WORKSPACE_GIT_URL — check the URL, token, and network"
     return 1
   fi
-  stash_existing_state
+
+  git init -q || return 1            # in place — runtime state stays untouched
+  git remote add origin "$WORKSPACE_GIT_URL" || return 1
+
   if [ "$rc" -eq 0 ]; then
-    if ! push_local_to_backup_branch; then
-      restore_stashed_state_full
-      return 1
-    fi
-    if ! clone_workspace_sync; then
-      restore_stashed_state_full
-      return 1
-    fi
+    log "remote workspace-sync exists — backing up any local state, then adopting it"
+    preserve_local_to_backup || { rm -rf .git; return 1; }
+    adopt_remote_sync        || { rm -rf .git; return 1; }
   else
-    if ! create_workspace_sync; then
-      restore_stashed_state_full
-      return 1
-    fi
+    log "remote workspace-sync missing — creating it from local state (or seed)"
+    create_orphan_sync       || { rm -rf .git; return 1; }
   fi
-  restore_stashed_runtime_state
+
+  log "sync ready at $STATE_DIR"
 }
 
-# Sync-disabled fallback: gateway still needs workspace/ and openclaw.json
-# to boot, so seed them from /app/seed/ if they're missing.
-seed_local_only() {
-  cd "$STATE_DIR"
-  [ -f openclaw.json ] || cp    "$SEED_CONFIG"    openclaw.json
-  [ -d workspace    ] || cp -r "$SEED_WORKSPACE" workspace
+main() {
+  local sync_ok=0
+
+  if have_sync_env; then
+    if setup_credentials && setup_sync; then
+      sync_ok=1
+    else
+      clear_credentials
+      warn "git sync setup failed (check WORKSPACE_GIT_URL / WORKSPACE_GIT_TOKEN); continuing in local-only mode"
+    fi
+    unset WORKSPACE_GIT_TOKEN
+  fi
+
+  [ "$sync_ok" -eq 0 ] && { seed_local_only || { warn "could not seed workspace"; exit 1; }; }
+
+  cd "$STATE_DIR" || exit 1
+  log "starting gateway: $*"
+  exec "$@"
 }
 
-# ───── main ────────────────────────────────────────────────────────────
-
-sync_ok=0
-
-if [ -n "${WORKSPACE_GIT_TOKEN:-}" ] && [ -n "${WORKSPACE_GIT_URL:-}" ]; then
-  setup_credentials
-  if setup_sync; then
-    sync_ok=1
-  else
-    rm -f ~/.git-credentials
-    echo "init.sh: sync setup failed (check WORKSPACE_GIT_URL and WORKSPACE_GIT_TOKEN); falling back to local-only" >&2
-  fi
-  unset WORKSPACE_GIT_TOKEN
-fi
-
-[ "$sync_ok" -eq 0 ] && seed_local_only
-
-exec "$@"
+main "$@"
