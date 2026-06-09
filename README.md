@@ -4,14 +4,11 @@ A ready-to-deploy [OpenClaw](https://docs.openclaw.ai/) agent gateway for [Space
 
 ## What's included
 
-On boot, the container starts an OpenClaw **gateway** — a web control UI and chat interface for your agent — with a workspace pre-seeded with the standard [OpenClaw workspace files](https://docs.openclaw.ai/concepts/agent-workspace):
+On boot, the container starts an OpenClaw **gateway** — a web control UI and chat interface for your agent — with a standard [OpenClaw agent workspace](https://docs.openclaw.ai/concepts/agent-workspace) (the agent's memory, identity, rules, and config). On its first run the agent introduces itself and sets up its identity with you, guided by a `BOOTSTRAP.md` ritual it then deletes.
 
-- `AGENTS.md` — the agent's operating rules
-- `IDENTITY.md`, `USER.md`, `TOOLS.md` — who the agent is, who you are, and notes about your environment
-- `BOOTSTRAP.md` — a first-run setup ritual the agent runs once, then deletes
-- a `git-sync` skill and a sync-status hook, used only when git sync is enabled
+On top of that, this template adds a `git-sync` skill and a sync-status hook, used only when git sync is enabled.
 
-These files are a starting point; edit any of them to shape your agent.
+You shape the agent by talking to it and by editing its live workspace — see the note below.
 
 > **Note:** `seed/` only seeds a fresh workspace on first boot — editing it has no effect on an already-running deployment. Interact with the live agent through the control UI, or (with git sync enabled) edit its `workspace-sync` branch from your machine.
 

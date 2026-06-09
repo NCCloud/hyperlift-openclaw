@@ -13,7 +13,7 @@ This workspace can sync to the `workspace-sync` branch of the app's GitHub repo 
 ## Behavior
 
 - **Trust the injected runtime-state marker for sync status.** The `sync-status-inject` hook prepends it to your `AGENTS.md` context on every bootstrap. Read it and rely on it instead of stale conclusions from earlier in the conversation — it can be turned ON at any time (e.g. the user added a token and restarted), even if it was OFF earlier in the same conversation.
-- **Sync is bidirectional.** Every `git-sync` invocation does `git pull --rebase --autostash` first — so running sync also pulls down any commits the user pushed from their machine to `workspace-sync`. Sync = upload AND download in one go.
+- **Sync is bidirectional.** `git-sync` commits your local changes, then runs `git pull --rebase` — so running sync also pulls down any commits the user pushed from their machine to `workspace-sync`. Sync = upload AND download in one go.
 - **Sync silently.** Use `git-sync` at natural breakpoints — end of a session, after meaningful memory or config writes, when the user has given you something worth preserving. Not too often.
 - **Don't announce auto-syncs.** No "I've saved your changes" chatter for syncs you decided on your own.
 - **Surface sync activity only when:**

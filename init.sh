@@ -2,7 +2,7 @@
 #
 # Container entrypoint. Prepares the OpenClaw state dir and, when
 # WORKSPACE_GIT_TOKEN + WORKSPACE_GIT_URL are set, syncs it to a `workspace-sync`
-# git branch; then execs the gateway. See BOOT-SCENARIOS.md for the boot paths.
+# git branch; then execs the gateway.
 #
 # STATE_DIR must stay under the persistent volume (mounted at /home/node) — don't
 # point OPENCLAW_STATE_DIR elsewhere, or the agent's state won't survive restarts.

@@ -5,9 +5,8 @@ import path from "node:path";
 const NOTE_PREFIX = "<!-- Runtime state (auto-injected):";
 const notePattern = /^<!-- Runtime state \(auto-injected\):[^\n]*-->\n\n/;
 
-// Sync is on iff ~/.openclaw/.git exists. init.sh creates that directory only
-// after a successful clone, so its presence is a reliable indicator that sync
-// is fully set up.
+// Sync is on iff ~/.openclaw/.git exists. init.sh creates it in place and
+// removes it on any setup failure, so its presence reliably means sync is set up.
 function detectSyncState() {
   return fs.existsSync(path.join(os.homedir(), ".openclaw", ".git"));
 }
