@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 #
-# Container entrypoint. Prepares the OpenClaw state dir and, when
-# WORKSPACE_GIT_TOKEN + WORKSPACE_GIT_URL are set, syncs it to a `workspace-sync`
-# git branch; then execs the gateway.
-#
-# STATE_DIR must stay under the persistent volume (mounted at /home/node) — don't
-# point OPENCLAW_STATE_DIR elsewhere, or the agent's state won't survive restarts.
+# Container entrypoint: prepare the OpenClaw state dir — optionally syncing it to a
+# `workspace-sync` git branch when WORKSPACE_GIT_TOKEN + WORKSPACE_GIT_URL are set —
+# then exec the gateway. Keep OPENCLAW_STATE_DIR under /home/node (the persistent
+# volume) so state survives restarts.
 
 set -uo pipefail
 
@@ -22,8 +20,7 @@ have_sync_env() {
   [ -n "${WORKSPACE_GIT_TOKEN:-}" ] && [ -n "${WORKSPACE_GIT_URL:-}" ]
 }
 
-# Store the PAT for HTTPS git auth (github.com-scoped, 0600). It persists on the
-# volume, so runtime git keeps working without the env var.
+# Store the PAT for HTTPS git auth; persists on the volume so git works without the env var.
 setup_credentials() {
   git config --global user.name "openclaw-agent" || return 1
   git config --global user.email "agent@openclaw.local" || return 1
@@ -34,29 +31,42 @@ setup_credentials() {
 
 clear_credentials() { rm -f ~/.git-credentials; }
 
-# Seed the git-sync skill into the managed skills dir ($STATE_DIR/skills), a
-# sibling of workspace/ — a skill inside workspace/ would make OpenClaw skip the
-# first-run ritual.
+# Seed the git-sync skill into $STATE_DIR/skills — beside workspace/, not inside it
+# (a skill under workspace/ makes OpenClaw skip the first-run ritual).
 seed_managed_skills() {
   [ -d "$SEED_SKILLS" ] || return 0
   [ -d "$STATE_DIR/skills" ] && return 0
   cp -r "$SEED_SKILLS" "$STATE_DIR/skills" || { warn "could not seed the git-sync skill"; return 1; }
 }
 
-# No sync: seed workspace/ + openclaw.json + the skill if missing so the gateway can boot.
+# Seed workspace/ when empty, not just when absent: the base image ships an empty
+# workspace/ that a `[ -d ]` test would mistake for seeded. `/.` copies contents.
+seed_workspace_if_empty() {
+  [ -n "$(ls -A workspace 2>/dev/null)" ] && return 0
+  mkdir -p workspace || return 1
+  cp -r "$SEED_WORKSPACE/." workspace/ || return 1
+}
+
+# Seed config + workspace (required) and the skill (best-effort). Caller cd's to $STATE_DIR.
+seed_state() {
+  [ -f openclaw.json ] || cp "$SEED_CONFIG" openclaw.json || return 1
+  seed_workspace_if_empty || return 1
+  seed_managed_skills || true   # optional — never blocks boot
+}
+
+# No git sync: seed the state dir so the gateway can boot standalone.
 seed_local_only() {
   mkdir -p "$STATE_DIR" || return 1
   cd "$STATE_DIR" || return 1
-  [ -f openclaw.json ] || cp    "$SEED_CONFIG"    openclaw.json || return 1
-  [ -d workspace     ] || cp -r "$SEED_WORKSPACE" workspace     || return 1
-  seed_managed_skills         
+  seed_state || return 1
   log "local-only mode — no git sync"
 }
 
-has_local_state() { [ -d workspace ] || [ -f openclaw.json ]; }
+# Real local state worth preserving (non-empty workspace or a config file). Gate on
+# emptiness so the base image's empty workspace/ doesn't trigger a spurious backup.
+has_local_state() { [ -n "$(ls -A workspace 2>/dev/null)" ] || [ -f openclaw.json ]; }
 
-# Branch exists AND we have local workspace/openclaw.json: commit and push them to
-# a local-backup-<ts> branch before adopting the remote, so nothing is lost.
+# Remote branch exists: back up local state to a local-backup-<ts> branch before adopting.
 preserve_local_to_backup() {
   has_local_state || return 0
   local ts; ts="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -70,20 +80,17 @@ preserve_local_to_backup() {
   log "backed up prior local state to branch local-backup-$ts"
 }
 
-# Adopt the canonical remote branch (untracked runtime state is left alone).
+# Adopt the remote branch; untracked runtime state is left in place.
 adopt_remote_sync() {
   git fetch -q origin workspace-sync:refs/remotes/origin/workspace-sync || return 1
   git checkout -q -B workspace-sync origin/workspace-sync || return 1
 }
 
-# Branch missing: create it as an orphan from the local workspace/openclaw.json
-# if present, else from the seed.
+# Remote branch missing: create it as an orphan from local state (or the seed).
 create_orphan_sync() {
   git checkout -q -b workspace-sync || return 1
   cp "$SEED_GITIGNORE" .gitignore || return 1
-  { [ -f openclaw.json ] || cp    "$SEED_CONFIG"    openclaw.json; } || return 1
-  { [ -d workspace     ] || cp -r "$SEED_WORKSPACE" workspace;     } || return 1
-  seed_managed_skills || return 1          # include the skill in the first commit
+  seed_state || return 1
   git add .gitignore workspace openclaw.json || return 1
   [ -d skills ] && { git add skills || return 1; }
   git commit -q -m "bootstrap workspace-sync" || return 1
