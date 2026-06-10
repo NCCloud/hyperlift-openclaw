@@ -132,3 +132,7 @@ Then tell the agent `"pull from git"` and it picks up your changes. Ask it to `"
 - **The CLI reports `pairing required` or `scope upgrade pending`.** Approve the device in the control UI under **Nodes → Devices**.
 - **Something installed in the `Dockerfile` is missing at runtime.** If the build wrote it under `/home/node` (plugins, skills, caches), the persistent volume mounts over it — install it after boot instead. See [Persistent storage](#persistent-storage).
 - **The app restarts or runs out of memory (`OOMKilled`).** This template disables the Codex plugin (`plugins.entries.codex.enabled: false` in `seed/openclaw.default.json`). OpenAI models on the official API otherwise route to OpenAI's *Codex* runtime, which runs the agent in a separate app-server and spawns a full helper process per tool call — enough to exhaust a medium instance. Disabling it makes OpenAI models fall back to OpenClaw's lighter built-in runtime; non-OpenAI models are unaffected. Re-enable codex only if you want its agentic/code-execution features and have given the app more memory.
+
+## License
+
+This template is released under the [MIT License](LICENSE).
