@@ -1,6 +1,6 @@
 ---
 name: git-sync
-description: "Commit and push workspace changes to the `workspace-sync` branch of the app repo with a semantic message. Use when: (1) user asks 'sync to git' or similar, (2) at the end of a meaningful sequence of memory writes, (3) at natural end-of-session moments. Requires WORKSPACE_GIT_TOKEN to have been configured at container boot."
+description: "Sync the workspace to the `workspace-sync` branch of the app repo: commit local changes, pull remote changes (rebase), and push. Use when: (1) the user asks to 'sync to git', 'pull from git', or 'save that'; (2) after a meaningful sequence of memory writes; (3) at natural end-of-session moments. Requires git sync to have been enabled at boot (i.e. `~/.openclaw/.git` exists)."
 metadata:
   { "openclaw": { "emoji": "🔄", "requires": { "bins": ["git"] } } }
 ---
@@ -11,15 +11,14 @@ Push workspace changes to the `workspace-sync` branch of the app's git repo. If 
 
 Git operations run at `~/.openclaw/`, which is the working tree of `workspace-sync`.
 
-## Normal flow
+Sync is bidirectional — it always pulls remote changes, and commits + pushes local ones when there are any. So this same flow handles both "save my work" and "pull what I pushed from my machine".
 
 1. `cd ~/.openclaw`
-2. `git add workspace/ openclaw.json` — scope commits to agent state (`workspace/`) and container config (`openclaw.json`). Never stage other root-level files.
-3. If `git diff --cached --quiet` exits 0 (no staged changes): report "nothing to sync" and stop.
-4. `git commit -m "<semantic message describing what changed>"` — e.g. `"save notes on user's Python project"`, `"update SOUL.md per user feedback"`, `"end-of-session memory flush"`.
-5. `git pull --rebase origin workspace-sync` — pull any remote changes (the user may have pushed from their machine).
-6. `git push origin workspace-sync`
-7. Report success to the user with the commit subject. Only report that you synced if the user asked for it. When syncing automatically, don't report anything.
+2. `git add workspace/ openclaw.json skills/` — scope commits to agent state (`workspace/`), container config (`openclaw.json`), and the managed skills (`skills/`). Never stage other root-level files.
+3. If there ARE staged changes (`git diff --cached --quiet` exits non-zero): `git commit -m "<semantic message describing what changed>"` — e.g. `"save notes on user's Python project"`, `"update SOUL.md per user feedback"`. If nothing is staged, skip the commit but **keep going** (a pure pull still needs the next step).
+4. `git pull --rebase origin workspace-sync` — always; this brings down anything pushed from the user's machine.
+5. `git push origin workspace-sync` — pushes your commit if you made one (a no-op if there's nothing new).
+6. Report only if the user asked — give the commit subject, or say "already up to date" if nothing changed either way. When syncing automatically, stay silent.
 
 ## If `pull --rebase` fails (rebase conflict)
 

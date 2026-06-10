@@ -4,14 +4,11 @@ A ready-to-deploy [OpenClaw](https://docs.openclaw.ai/) agent gateway for [Space
 
 ## What's included
 
-On boot, the container starts an OpenClaw **gateway** — a web control UI and chat interface for your agent — with a workspace pre-seeded with the standard [OpenClaw workspace files](https://docs.openclaw.ai/concepts/agent-workspace):
+On boot, the container starts an OpenClaw **gateway** — a web control UI and chat interface for your agent — with a standard [OpenClaw agent workspace](https://docs.openclaw.ai/concepts/agent-workspace) (the agent's memory, identity, rules, and config). On its first run the agent introduces itself and sets up its identity with you, guided by a `BOOTSTRAP.md` ritual it then deletes.
 
-- `AGENTS.md` — the agent's operating rules
-- `IDENTITY.md`, `USER.md`, `TOOLS.md` — who the agent is, who you are, and notes about your environment
-- `BOOTSTRAP.md` — a first-run setup ritual the agent runs once, then deletes
-- a `git-sync` skill and a sync-status hook, used only when git sync is enabled
+On top of that, this template adds a `git-sync` skill and a sync-status hook, used only when git sync is enabled.
 
-These files are a starting point; edit any of them to shape your agent.
+You shape the agent by talking to it and by editing its live workspace — see the note below.
 
 > **Note:** `seed/` only seeds a fresh workspace on first boot — editing it has no effect on an already-running deployment. Interact with the live agent through the control UI, or (with git sync enabled) edit its `workspace-sync` branch from your machine.
 
@@ -28,6 +25,8 @@ Create a Hyperlift app from this template; Hyperlift builds the container from t
 
 See the [configuration reference](https://docs.openclaw.ai/gateway/configuration) for `openclaw.json` options.
 
+> **Note:** The agent's data lives at `/home/node/.openclaw` on the app's persistent volume. Leave `OPENCLAW_STATE_DIR` at its default — pointing it outside `/home/node` means the data won't survive a restart.
+
 Once deployed, open the gateway's URL, sign in with your gateway password, and start chatting with your agent.
 
 ## Persistent storage
@@ -38,7 +37,6 @@ The same mount has a build-time implication for customizing this template: at ru
 
 - `RUN openclaw plugins install clawhub:@openclaw/diagnostics-otel` — writes plugins, extensions, and config under `/home/node/.openclaw`
 - `RUN openclaw skills install calendar` — writes skills to `/home/node/.openclaw/workspace/skills`
-- `RUN npx playwright install --with-deps chromium` — installs Chromium browsers under `/home/node/.cache/ms-playwright` by default (the `--with-deps` system packages are installed outside `/home/node`)
 
 Installing ordinary system packages (`jq`, `wget`, `tree`, …) in the `Dockerfile` works as expected — they land outside `/home/node`.
 
@@ -55,7 +53,7 @@ You can operate your deployed gateway from your own machine with the OpenClaw CL
 **1. Install the matching version.** The CLI and gateway must run the same OpenClaw version, otherwise the connection fails with a protocol error. See the `Dockerfile`, or the version shown in the control UI. Install that version with npm — Node 24 is recommended and Node 22+ is supported, per the [installation guide](https://docs.openclaw.ai/install):
 
 ```bash
-npm install -g openclaw@2026.5.5
+npm install -g openclaw@2026.6.1
 ```
 
 **2. Point the CLI at your gateway.** Configure [remote gateway mode](https://docs.openclaw.ai/gateway/remote):
@@ -101,11 +99,11 @@ The agent's workspace already persists on the deployment's volume across restart
 **Set up:**
 
 1. Create a fine-grained GitHub PAT (Settings → Developer settings → Personal access tokens → Fine-grained), scoped to the single repository this app deploys from, with **Contents: read and write**.
-2. Set `WORKSPACE_GIT_URL` (your template repository's HTTPS URL, e.g. `https://github.com/you/repo.git`) and `WORKSPACE_GIT_TOKEN` (the PAT) in your Hyperlift environment, then restart.
+2. Set `WORKSPACE_GIT_URL` (your template repository's HTTPS URL, e.g. `https://github.com/you/repo.git`) and `WORKSPACE_GIT_TOKEN` (the PAT) in your Hyperlift environment — saving them restarts the app automatically, and sync is set up on the way back up.
 
 On first sync, the agent's current workspace becomes the first commit on a new `workspace-sync` branch — a standalone branch that holds only the workspace files, kept separate from your app's code.
 
-**What syncs:** only the agent's `workspace/` directory and its `openclaw.json` configuration. Runtime state — credentials, sessions, and scheduled jobs — stays local to the container and is never committed.
+**What syncs:** the agent's `workspace/` directory, its `openclaw.json` configuration, and `skills/`. Runtime state — credentials, sessions, and scheduled jobs — stays local to the container and is never committed.
 
 > **Do not put secrets in `openclaw.json`.** Because that file is synced to your repository, any API key or token entered into the control UI's configuration or skill fields would be pushed to the branch in plaintext. Keep secrets in your Hyperlift environment variables instead.
 
@@ -132,4 +130,5 @@ Then tell the agent `"pull from git"` and it picks up your changes. Ask it to `"
 - **Git sync is not working.** Check the container logs. The most common causes are an expired PAT, an SSH-form URL instead of HTTPS, or a PAT missing **Contents: read and write**. If the remote cannot be reached, the container falls back to local-only mode and keeps running.
 - **The CLI reports `protocol error`.** The CLI and gateway versions differ — install the version this template pins (see [Connect the OpenClaw CLI](#connect-the-openclaw-cli)).
 - **The CLI reports `pairing required` or `scope upgrade pending`.** Approve the device in the control UI under **Nodes → Devices**.
-- **Something installed in the `Dockerfile` is missing at runtime.** If the build wrote it under `/home/node` (plugins, Playwright browsers, caches), the persistent volume mounts over it — install it after boot instead. See [Persistent storage](#persistent-storage).
+- **Something installed in the `Dockerfile` is missing at runtime.** If the build wrote it under `/home/node` (plugins, skills, caches), the persistent volume mounts over it — install it after boot instead. See [Persistent storage](#persistent-storage).
+- **The app restarts or runs out of memory (`OOMKilled`).** This template disables the Codex plugin (`plugins.entries.codex.enabled: false` in `seed/openclaw.default.json`). OpenAI models on the official API otherwise route to OpenAI's *Codex* runtime, which runs the agent in a separate app-server and spawns a full helper process per tool call — enough to exhaust a medium instance. Disabling it makes OpenAI models fall back to OpenClaw's lighter built-in runtime; non-OpenAI models are unaffected. Re-enable codex only if you want its agentic/code-execution features and have given the app more memory.

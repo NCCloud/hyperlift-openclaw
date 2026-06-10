@@ -1,7 +1,7 @@
 {
   "gateway": {
     "mode": "local",
-    "port": 3001,
+    "port": 8080,
     "bind": "lan",
     "auth": {
       "mode": "password"
@@ -33,15 +33,24 @@
     }
   },
   "browser": {
-    "enabled": true,
-    "headless": true,
-    "noSandbox": true
+    "enabled": false
+  },
+  "plugins": {
+    "entries": {
+      "codex": {
+        "enabled": false
+      }
+    }
   },
   "hooks": {
     "internal": {
       "entries": {
         "sync-status-inject": {
           "enabled": true
+        },
+        "bootstrap-extra-files": {
+          "enabled": true,
+          "paths": ["sync/AGENTS.md"]
         }
       }
     }
