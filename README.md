@@ -99,7 +99,7 @@ The agent's workspace already persists on the deployment's volume across restart
 **Set up:**
 
 1. Create a fine-grained GitHub PAT (Settings → Developer settings → Personal access tokens → Fine-grained), scoped to the single repository this app deploys from, with **Contents: read and write**.
-2. Set `WORKSPACE_GIT_URL` (your template repository's HTTPS URL, e.g. `https://github.com/you/repo.git`) and `WORKSPACE_GIT_TOKEN` (the PAT) in your Hyperlift environment, then restart.
+2. Set `WORKSPACE_GIT_URL` (your template repository's HTTPS URL, e.g. `https://github.com/you/repo.git`) and `WORKSPACE_GIT_TOKEN` (the PAT) in your Hyperlift environment — saving them restarts the app automatically, and sync is set up on the way back up.
 
 On first sync, the agent's current workspace becomes the first commit on a new `workspace-sync` branch — a standalone branch that holds only the workspace files, kept separate from your app's code.
 

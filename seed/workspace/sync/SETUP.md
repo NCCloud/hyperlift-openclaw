@@ -29,7 +29,7 @@ Read this when the user wants to enable sync (or asks how to create the PAT). Wa
      - `WORKSPACE_GIT_TOKEN` = the PAT from step 1 (mark as sensitive).
      - `WORKSPACE_GIT_URL` = the HTTPS URL from step 2.
 
-4. **Restart the container** from the Hyperlift dashboard. When I come back up, I'll clone the repo, create a `workspace-sync` branch if it doesn't exist, and push my current workspace state to it. My next sessions will sync transparently.
+4. **Done — saving the env vars restarts the container automatically.** When I come back up, I'll connect sync to the repo — creating the `workspace-sync` branch from my current workspace if it doesn't exist, or adopting the existing one (any prior local state gets backed up to a `local-backup-<timestamp>` branch). My next sessions will sync transparently.
 
 ## Rotation reminder
 

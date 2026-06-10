@@ -8,11 +8,11 @@ read_when:
 
 # Git Sync
 
-This workspace can sync to the `workspace-sync` branch of the app's GitHub repo via the `git-sync` skill. A runtime-state marker is injected at the top of your `AGENTS.md` startup context on every session — a line of the form `<!-- Runtime state (auto-injected): git sync is currently ON -->` (or `OFF`). Trust that marker as the live, filesystem-derived truth for whether sync is active.
+This workspace can sync to the `workspace-sync` branch of the app's GitHub repo via the `git-sync` skill. A runtime-state marker is injected at the top of your `AGENTS.md` context on every turn — the `sync-status-inject` hook runs on each `agent:bootstrap` event — as a line of the form `<!-- Runtime state (auto-injected): git sync is currently ON -->` (or `OFF`). Trust that marker as the live, filesystem-derived truth for whether sync is active.
 
 ## Behavior
 
-- **Trust the injected runtime-state marker for sync status.** The `sync-status-inject` hook prepends it to your `AGENTS.md` context on every bootstrap. Read it and rely on it instead of stale conclusions from earlier in the conversation — it can be turned ON at any time (e.g. the user added a token and restarted), even if it was OFF earlier in the same conversation.
+- **Trust the injected runtime-state marker for sync status.** The `sync-status-inject` hook prepends it on every `agent:bootstrap` event (i.e. every turn). Read it and rely on it instead of stale conclusions from earlier in the conversation — it can be turned ON at any time (e.g. the user added a token and restarted), even if it was OFF earlier in the same conversation.
 - **Sync is bidirectional.** `git-sync` commits your local changes, then runs `git pull --rebase` — so running sync also pulls down any commits the user pushed from their machine to `workspace-sync`. Sync = upload AND download in one go.
 - **Sync silently.** Use `git-sync` at natural breakpoints — end of a session, after meaningful memory or config writes, when the user has given you something worth preserving. Not too often.
 - **Don't announce auto-syncs.** No "I've saved your changes" chatter for syncs you decided on your own.
@@ -33,17 +33,17 @@ After delivering the intro, record a line like `2026-04-24 — gave sync intro` 
 Because sync is bidirectional, if the user edited files in their local clone of `workspace-sync`, committed, and pushed, those changes only land in the running container when a sync happens.
 
 - If the user says *"I edited SOUL.md locally, can you pick it up?"* / *"pull from git"* → invoke `git-sync`. The `git pull --rebase` step brings their changes into the local tree.
-- **Startup-context files** (AGENTS.md, SOUL.md, USER.md, TOOLS.md, HEARTBEAT.md) are auto-loaded at **session start**. If those changed mid-session via a pull, the new content exists on disk but your in-memory context still has the old. Tell the user the changes will fully take effect in the next session, or re-read the specific file right now to pick it up in this session.
+- **Startup-context files** (AGENTS.md, SOUL.md, USER.md, TOOLS.md, HEARTBEAT.md) are re-read and re-injected on **every turn**, so a pulled change to one of them is picked up automatically on your **next turn** — no need to wait for a new session.
 - Memory files (`memory/YYYY-MM-DD.md`, `MEMORY.md`) you read on demand anyway, so edits to those show up as soon as you read them.
 
 ### Recognized user asks
 
 - **"sync to git now"** / **"save that"** → invoke the `git-sync` skill immediately with a semantic commit message. Remember this also pulls any remote changes the user may have pushed.
-- **"pull my changes from git"** / **"I pushed something from my machine"** → invoke `git-sync` — the pull-rebase step picks up their commits. If startup files (AGENTS.md etc.) changed, remind them those re-load fully in the next session.
+- **"pull my changes from git"** / **"I pushed something from my machine"** → invoke `git-sync` — the pull-rebase step picks up their commits; any changed startup files (AGENTS.md etc.) re-load on your next turn.
 - **"enable periodic git backup"** → offer to add an OpenClaw cron job that runs `git-sync` every 6 hours:
   `openclaw cron add --name "git-sync" --every 6h --session isolated --tools exec --message "run the git-sync skill"`
   Flag the LLM cost; only enable on explicit request. (You sync automatically at natural breakpoints anyway unless the user tells you not to.)
-- **"disable git sync"** → removing `WORKSPACE_GIT_TOKEN` alone does **not** stop sync on a running deployment: my clone and stored credentials persist on the volume, so I'd keep syncing. To actually stop, the user should revoke the PAT on GitHub (my pushes then fail) or wipe the deployment's volume to start fresh.
+- **"disable git sync"** → removing `WORKSPACE_GIT_TOKEN` alone does **not** stop sync on a running deployment: the git repo and stored credentials persist on the volume, so I'd keep syncing. To actually stop, the user should revoke the PAT on GitHub (my pushes then fail) or wipe the deployment's volume to start fresh.
 - **"how do I set up sync" / "how do I create the PAT"** → read `sync/SETUP.md` and walk them through the steps there.
 
 ### Backup branches the user might ask about

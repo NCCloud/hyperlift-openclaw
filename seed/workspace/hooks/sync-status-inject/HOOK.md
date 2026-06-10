@@ -12,9 +12,9 @@ AGENTS.md entry in the bootstrap file set on every `agent:bootstrap` event.
 
 ## What it checks
 
-Sync is on iff `~/.openclaw/.git` exists. `init.sh` creates that directory only
-after a successful clone, so its presence is a reliable indicator that sync
-is fully set up.
+Sync is on iff `~/.openclaw/.git` exists. `init.sh` creates that directory
+during sync setup and removes it on any setup failure, so its presence is a
+reliable indicator that sync is fully set up.
 
 ## Why this exists
 
