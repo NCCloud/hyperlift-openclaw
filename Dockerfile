@@ -3,6 +3,11 @@ FROM ghcr.io/openclaw/openclaw:2026.6.1
 COPY --chown=node:node seed/ /app/seed/
 COPY --chown=node:node --chmod=0755 init.sh /app/init.sh
 
+# Startup tuning per `openclaw doctor`: ephemeral compile cache (deliberately off
+# the persistent volume), and in-process restarts — no supervisor in a container.
+ENV NODE_COMPILE_CACHE=/var/tmp/openclaw-compile-cache \
+    OPENCLAW_NO_RESPAWN=1
+
 # matches gateway.port in seed/openclaw.default.json.
 EXPOSE 8080
 
