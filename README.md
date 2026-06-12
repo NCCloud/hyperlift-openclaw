@@ -43,7 +43,6 @@ Installing ordinary system packages (`jq`, `wget`, `tree`, …) in the `Dockerfi
 To install anything that lives under `/home/node`, do it after the volume is mounted instead:
 
 - **Ask the agent** — it can run the command inside its container with the exec tool.
-- **Use the OpenClaw CLI** against your gateway (see [Connect the OpenClaw CLI](#connect-the-openclaw-cli)) — e.g. `openclaw plugins install …`.
 - **Extend `init.sh`** — it's the entrypoint and runs on every boot after the volume is mounted, so its changes to `/home/node` stick and re-apply even to a fresh volume.
 
 ## Connect the OpenClaw CLI
@@ -90,6 +89,14 @@ openclaw agent --agent main --message "hello from the cli"
 
 you may see `scope upgrade pending approval`. Approve it the same way, under **Nodes → Devices**. Routine use afterward does not prompt again unless an action requires a new scope.
 
+### Remote CLI limitations
+
+The CLI talks to the gateway over its WebSocket API; it is not a shell inside the container. Use it to operate the running gateway: check `health`, tail `logs`, message the agent (`agent --message …`), manage `cron` jobs, approve `devices`.
+
+Installation and setup commands — `config`, `plugins`, `skills`, `models`, `onboard`, and similar — act on the machine the CLI runs on, not the remote gateway. They complete without error even with remote mode configured.
+
+To change the deployment, use the control UI, or ask the agent — it can install plugins and edit `openclaw.json` inside the container. With [git sync](#git-sync-optional) enabled, workspace files and `openclaw.json` can also be edited through the `workspace-sync` branch. For low-level access, [`openclaw gateway call`](https://docs.openclaw.ai/cli/gateway) invokes gateway RPC methods directly.
+
 **Reference:** [Installation](https://docs.openclaw.ai/install) · [Remote gateway](https://docs.openclaw.ai/gateway/remote) · [Devices & pairing](https://docs.openclaw.ai/cli/devices)
 
 ## Git sync (optional)
@@ -130,6 +137,8 @@ Then tell the agent `"pull from git"` and it picks up your changes. Ask it to `"
 - **Git sync is not working.** Check the container logs. The most common causes are an expired PAT, an SSH-form URL instead of HTTPS, or a PAT missing **Contents: read and write**. If the remote cannot be reached, the container falls back to local-only mode and keeps running.
 - **The CLI reports `protocol error`.** The CLI and gateway versions differ — install the version this template pins (see [Connect the OpenClaw CLI](#connect-the-openclaw-cli)).
 - **The CLI reports `pairing required` or `scope upgrade pending`.** Approve the device in the control UI under **Nodes → Devices**.
+- **A plugin/skill/config change made via the CLI doesn't show up in the deployment.** Install- and config-type commands act on the machine running the CLI, not the remote gateway. See [Remote CLI limitations](#remote-cli-limitations).
+- **`openclaw dashboard` or `openclaw gateway status` reports the gateway is not running.** Both check for a gateway on the local machine. Use `openclaw health` to check the deployment.
 - **Something installed in the `Dockerfile` is missing at runtime.** If the build wrote it under `/home/node` (plugins, skills, caches), the persistent volume mounts over it — install it after boot instead. See [Persistent storage](#persistent-storage).
 - **The app restarts or runs out of memory (`OOMKilled`).** This template disables the Codex plugin (`plugins.entries.codex.enabled: false` in `seed/openclaw.default.json`). OpenAI models on the official API otherwise route to OpenAI's *Codex* runtime, which runs the agent in a separate app-server and spawns a full helper process per tool call — enough to exhaust a medium instance. Disabling it makes OpenAI models fall back to OpenClaw's lighter built-in runtime; non-OpenAI models are unaffected. Re-enable codex only if you want its agentic/code-execution features and have given the app more memory.
 
