@@ -1,4 +1,4 @@
-FROM ghcr.io/openclaw/openclaw:2026.6.1
+FROM ghcr.io/openclaw/openclaw:2026.6.6
 
 COPY --chown=node:node seed/ /app/seed/
 COPY --chown=node:node --chmod=0755 init.sh /app/init.sh

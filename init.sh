@@ -50,6 +50,7 @@ seed_workspace_if_empty() {
 # Seed config + workspace (required) and the skill (best-effort). Caller cd's to $STATE_DIR.
 seed_state() {
   [ -f openclaw.json ] || cp "$SEED_CONFIG" openclaw.json || return 1
+  chmod 600 openclaw.json || return 1
   seed_workspace_if_empty || return 1
   seed_managed_skills || true   # optional — never blocks boot
 }
@@ -57,6 +58,8 @@ seed_state() {
 # No git sync: seed the state dir so the gateway can boot standalone.
 seed_local_only() {
   mkdir -p "$STATE_DIR" || return 1
+  mkdir -p "$STATE_DIR/agents/main/sessions" "$STATE_DIR/credentials" || return 1
+  chmod -R 700 "$STATE_DIR" || return 1
   cd "$STATE_DIR" || return 1
   seed_state || return 1
   log "local-only mode — no git sync"
@@ -153,6 +156,10 @@ main() {
 
   cd "$STATE_DIR" || exit 1
   log "starting gateway: $*"
+
+  # Run read only health checks (triggers catalog loading as a side effect)
+  openclaw doctor --lint
+
   exec "$@"
 }
 
