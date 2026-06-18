@@ -52,7 +52,7 @@ You can operate your deployed gateway from your own machine with the OpenClaw CL
 **1. Install the matching version.** The CLI and gateway must run the same OpenClaw version, otherwise the connection fails with a protocol error. See the `Dockerfile`, or the version shown in the control UI. Install that version with npm — Node 24 is recommended and Node 22+ is supported, per the [installation guide](https://docs.openclaw.ai/install):
 
 ```bash
-npm install -g openclaw@2026.6.1
+npm install -g openclaw@2026.6.8
 ```
 
 **2. Point the CLI at your gateway.** Configure [remote gateway mode](https://docs.openclaw.ai/gateway/remote):

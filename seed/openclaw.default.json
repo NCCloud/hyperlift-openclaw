@@ -55,7 +55,7 @@
         "enabled": false
       },
       "codex": {
-        "enabled": true
+        "enabled": false
       },
       "copilot-proxy": {
         "enabled": false
