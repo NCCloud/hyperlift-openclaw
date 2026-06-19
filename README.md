@@ -41,7 +41,7 @@ To switch to a different one of the six later, add that provider's key (e.g. `AN
 
 OpenClaw supports many more providers; you just enable and configure them yourself. The full list and per-provider settings are in the [OpenClaw provider docs](https://docs.openclaw.ai/providers).
 
-**Recommended — run onboarding from the chat.** This template enables the `/bash` command in the web chat, which runs commands inside the container (Hyperlift gives no SSH access, so this is how you reach the host). Add your provider's API key in the Hyperlift manager, then enable the plugin and run `onboard` — it configures the plugin, populates the model catalog, and sets the agent's default model in one step. For Cerebras:
+**Recommended — run onboarding from the chat.** This template enables the `/bash` command in the web chat, which runs commands inside the container (Hyperlift gives no SSH access, so this is how you run commands in the deployment). Add your provider's API key in the Hyperlift manager, then enable the plugin and run `onboard` — it configures the plugin, populates the model catalog, and sets the agent's default model in one step. For Cerebras:
 
 ```text
 /plugins enable cerebras
@@ -184,7 +184,7 @@ The gateway and its web chat are served on a public URL, so treat the deployment
 
 - **Set a strong, unique gateway password and rotate it regularly.** It's the only thing between the public internet and your agent.
 - **Keep secrets in environment variables, not in `openclaw.json`.** OpenClaw reads keys such as `OPENAI_API_KEY` straight from the environment, and can substitute env values into the config where you do need to reference one — so a secret rarely has to live in the file at all, which also keeps it out of [git sync](#git-sync-optional).
-- **Disable what you don't use.** This template turns on the unrestricted `/bash` command in the web chat so you can run provider onboarding (see [Configure your model provider](#configure-your-model-provider)). Once that's done, switch it off — set `commands.bash` to `false` in the live config — so a compromised UI can't run arbitrary commands on the host. The restricted `/crestodian` diagnostic commands keep working regardless.
+- **Disable what you don't use.** This template turns on the unrestricted `/bash` command in the web chat so you can run provider onboarding (see [Configure your model provider](#configure-your-model-provider)). Once that's done, switch it off — set `commands.bash` to `false` in the live config — so a compromised UI can't run arbitrary commands in the container. You can still repair and reconfigure the deployment with [`/crestodian`](https://docs.openclaw.ai/cli/crestodian), OpenClaw's restricted setup-and-repair command surface, which works regardless.
 
 ## Troubleshooting
 
