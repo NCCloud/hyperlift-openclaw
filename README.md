@@ -8,9 +8,7 @@ On boot, the container starts an OpenClaw **gateway** — a web control UI and c
 
 On top of that, this template adds a `git-sync` skill and a sync-status hook, used only when git sync is enabled.
 
-You shape the agent by talking to it and by editing its live workspace — see the note below.
-
-> **Note:** `seed/` only seeds a fresh workspace on first boot — editing it has no effect on an already-running deployment. Interact with the live agent through the control UI, or (with git sync enabled) edit its `workspace-sync` branch from your machine.
+> **Note:** The `seed/` directory bootstraps the workspace only on first boot — editing it has no effect on an already-running deployment. To change a running deployment, see [Editing the configuration](#editing-the-configuration).
 
 ## Deploy to Hyperlift
 
@@ -32,8 +30,6 @@ Once deployed, open the gateway's URL, sign in with your gateway password, and s
 ## Configure your model provider
 
 The template ships with six providers enabled and tested — **Anthropic, Google, Mistral, OpenAI, OpenRouter, and xAI**. Using one of these is the easy path; any other provider takes a few extra steps on the running deployment.
-
-> Everything here changes the **live** instance. Editing `seed/` has no effect on a deployment that has already booted (see the note under [What's included](#whats-included)).
 
 ### A preconfigured provider (recommended)
 
@@ -67,7 +63,7 @@ For most providers, steps 1–2 are enough.
 
 ## Editing the configuration
 
-Almost everything about the deployment lives in `openclaw.json` — the model, enabled plugins and skills, agent behavior, and gateway settings — so you'll change it regularly as you customize. The easiest way is to just **ask the agent**; there are five methods in all, and every one changes the **live** instance (editing `seed/` does nothing once the app has booted):
+Almost everything about the deployment lives in `openclaw.json` — the model, enabled plugins and skills, agent behavior, and gateway settings — so you'll change it regularly as you customize. The easiest way is to just **ask the agent**; there are five methods in all, and every one changes the **live** instance:
 
 | Method | Where | Good for |
 |---|---|---|
@@ -77,9 +73,7 @@ Almost everything about the deployment lives in `openclaw.json` — the model, e
 | **Git-sync branch** | The `workspace-sync` branch, edited from your machine | Versioned, off-cluster edits to `openclaw.json` and workspace files. Requires [git sync](#git-sync-optional). |
 | **Remote CLI** | The `openclaw` CLI on your machine | *Operating* the gateway (health, logs, messaging) — **not** config: `config`/`plugins`/`onboard` run locally, not on the deployment. See [Remote CLI limitations](#remote-cli-limitations). |
 
-Pick whichever suits the change — the [model-provider steps](#configure-your-model-provider) above, for example, use `/bash` (onboarding) or Raw Mode (manual edits).
-
-> Whichever you use, keep secrets out of `openclaw.json` — see [Security](#security).
+Pick whichever suits the change — the [model-provider steps](#configure-your-model-provider) above, for example, use `/bash` (onboarding) or Raw Mode (manual edits). Whichever you use, keep secrets out of `openclaw.json` — see [Security](#security).
 
 ## Persistent storage
 
@@ -189,12 +183,12 @@ Then tell the agent `"pull from git"` and it picks up your changes. Ask it to `"
 The gateway and its web chat are served on a public URL, so treat the deployment as internet-facing:
 
 - **Set a strong, unique gateway password and rotate it regularly.** It's the only thing between the public internet and your agent.
-- **Keep secrets in environment variables, not in `openclaw.json`.** OpenClaw reads keys such as `OPENAI_API_KEY` straight from the environment, and can substitute env values into the config where you do need to reference them — so a secret rarely has to live in the file itself. This matters doubly with [git sync](#git-sync-optional), which would push anything in `openclaw.json` to your repository in plaintext.
+- **Keep secrets in environment variables, not in `openclaw.json`.** OpenClaw reads keys such as `OPENAI_API_KEY` straight from the environment, and can substitute env values into the config where you do need to reference one — so a secret rarely has to live in the file at all, which also keeps it out of [git sync](#git-sync-optional).
 - **Disable what you don't use.** This template turns on the unrestricted `/bash` command in the web chat so you can run provider onboarding (see [Configure your model provider](#configure-your-model-provider)). Once that's done, switch it off — set `commands.bash` to `false` in the live config — so a compromised UI can't run arbitrary commands on the host. The restricted `/crestodian` diagnostic commands keep working regardless.
 
 ## Troubleshooting
 
-- **A provider or its models don't appear after you set them up.** Confirm the plugin is enabled and the key is set (see [Configure your model provider](#configure-your-model-provider)), then restart the app from the Hyperlift manager. If it still misbehaves, run `/bash openclaw doctor --fix` from the web chat — or the `/crestodian doctor fix` (then `/crestodian yes`) if you've turned `/bash` off — to repair common configuration problems.
+- **A provider or its models don't appear after you set them up.** Confirm the plugin is enabled and the key is set (see [Configure your model provider](#configure-your-model-provider)), then restart the app from the Hyperlift manager. If it still misbehaves, run `/bash openclaw doctor --fix` from the web chat — or `/crestodian doctor fix` (then `/crestodian yes`) if you've turned `/bash` off — to repair common configuration problems.
 - **Git sync is not working.** Check the container logs. The most common causes are an expired PAT, an SSH-form URL instead of HTTPS, or a PAT missing **Contents: read and write**. If the remote cannot be reached, the container falls back to local-only mode and keeps running.
 - **The CLI reports `protocol error`.** The CLI and gateway versions differ — install the version this template pins (see [Connect the OpenClaw CLI](#connect-the-openclaw-cli)).
 - **The CLI reports `pairing required` or `scope upgrade pending`.** Approve the device in the control UI under **Nodes → Devices**.
