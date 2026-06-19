@@ -14,11 +14,11 @@ You shape the agent by talking to it and by editing its live workspace — see t
 
 ## Deploy to Hyperlift
 
-Create a Hyperlift app from this template; Hyperlift builds the container from the `Dockerfile`. On first install it prompts you for the two required values — a **provider API key** and the **gateway password** — and stores them as the app's environment variables. The optional variables you add to the app's environment yourself.
+Create a Hyperlift app from this template; Hyperlift builds the container from the `Dockerfile`. On first install it asks you to pick a model provider and enter its API key, and to set a **gateway password**; both are stored as the app's environment variables. The optional variables you add to the app's environment yourself.
 
 | Variable | Set | Purpose |
 |---|---|---|
-| `OPENAI_API_KEY` | Prompted on install | Provider key for the agent's model. The template defaults to the `openai/gpt-5.4` model; to use another provider, change the model in `openclaw.json` and supply the matching key (e.g. `ANTHROPIC_API_KEY`). |
+| `<provider>_API_KEY` | Prompted on install | API key for the model provider you pick during install — e.g. `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`. See [Configure your model provider](#configure-your-model-provider). |
 | `OPENCLAW_GATEWAY_PASSWORD` | Prompted on install | Password for the gateway and its control UI. |
 | `WORKSPACE_GIT_URL` | Optional | Enables git sync — the HTTPS URL of the repository to sync the agent's workspace to. See [Git sync](#git-sync-optional). |
 | `WORKSPACE_GIT_TOKEN` | Optional | GitHub token for git sync, paired with `WORKSPACE_GIT_URL`. |
@@ -28,6 +28,58 @@ See the [configuration reference](https://docs.openclaw.ai/gateway/configuration
 > **Note:** The agent's data lives at `/home/node/.openclaw` on the app's persistent volume. Leave `OPENCLAW_STATE_DIR` at its default — pointing it outside `/home/node` means the data won't survive a restart.
 
 Once deployed, open the gateway's URL, sign in with your gateway password, and start chatting with your agent.
+
+## Configure your model provider
+
+The template ships with six providers enabled and tested — **Anthropic, Google, Mistral, OpenAI, OpenRouter, and xAI**. Using one of these is the easy path; any other provider takes a few extra steps on the running deployment.
+
+> Everything here changes the **live** instance. Editing `seed/` has no effect on a deployment that has already booted (see the note under [What's included](#whats-included)).
+
+### A preconfigured provider (recommended)
+
+Pick your provider when you create the app and enter its API key. Its plugin is already on, so its models show up in the control UI — open the model picker and choose the one the agent should use. That's all.
+
+To switch to a different one of the six later, add that provider's key (e.g. `ANTHROPIC_API_KEY`) in the [Hyperlift manager](https://www.spaceship.com/application/hyperlift-manager/) and select its model in the UI.
+
+### Another provider
+
+OpenClaw supports many more providers; you just enable and configure them yourself. The full list and per-provider settings are in the [OpenClaw provider docs](https://docs.openclaw.ai/providers).
+
+**Recommended — run onboarding from the chat.** This template enables the `/bash` command in the web chat, which runs commands inside the container (Hyperlift gives no SSH access, so this is how you reach the host). Add your provider's API key in the Hyperlift manager, then enable the plugin and run `onboard` — it configures the plugin, populates the model catalog, and sets the agent's default model in one step. For Cerebras:
+
+```text
+/plugins enable cerebras
+/bash openclaw onboard --auth-choice cerebras-api-key --cerebras-api-key "$CEREBRAS_API_KEY" --gateway-auth=password --gateway-password="\${OPENCLAW_GATEWAY_PASSWORD}" --gateway-bind=lan --skip-skills --skip-ui --accept-risk --non-interactive
+```
+
+- Swap `--auth-choice` and `--<provider>-api-key` for your provider — the [provider docs](https://docs.openclaw.ai/providers) list the exact names.
+- The `--gateway-*` flags are required even though Hyperlift already sets these; `onboard` refuses to run without them. `OPENCLAW_GATEWAY_PASSWORD` is already in the environment, so the command works as-is.
+- `--accept-risk` and `--non-interactive` let it run unattended from the chat.
+
+**Alternative — configure it by hand.** [Edit the live `openclaw.json`](#editing-the-configuration) and:
+
+1. Enable the plugin — set `plugins.entries.<provider>.enabled` to `true`.
+2. Add the provider's API key as an environment variable in the Hyperlift manager.
+3. If its models don't appear, add them by hand under `models.providers` and set `agents.defaults.model` — the [provider docs](https://docs.openclaw.ai/providers) include a sample config for each.
+4. Still not working? Restart the app from the Hyperlift manager; if it persists, see [Troubleshooting](#troubleshooting).
+
+For most providers, steps 1–2 are enough.
+
+## Editing the configuration
+
+Almost everything about the deployment lives in `openclaw.json` — the model, enabled plugins and skills, agent behavior, and gateway settings — so you'll change it regularly as you customize. The easiest way is to just **ask the agent**; there are five methods in all, and every one changes the **live** instance (editing `seed/` does nothing once the app has booted):
+
+| Method | Where | Good for |
+|---|---|---|
+| **Ask the agent** | Plain language in the web chat | The simplest and most common approach — say what you want ("enable the Cerebras plugin", "switch to model X", "add a skill for Y") and the agent edits `openclaw.json` and applies it for you. It runs inside the container, so it can't set Hyperlift env vars — add API keys there yourself. |
+| **Control UI — Raw Mode** | **Settings → Advanced → Raw Mode → Raw config** in the gateway | Editing `openclaw.json` by hand from the browser; nothing to install. |
+| **`/bash` in the web chat** | Type `/bash openclaw …` in the chat | Running OpenClaw commands inside the container yourself — `onboard`, `plugins enable`, `config set`. They take effect on the deployment. |
+| **Git-sync branch** | The `workspace-sync` branch, edited from your machine | Versioned, off-cluster edits to `openclaw.json` and workspace files. Requires [git sync](#git-sync-optional). |
+| **Remote CLI** | The `openclaw` CLI on your machine | *Operating* the gateway (health, logs, messaging) — **not** config: `config`/`plugins`/`onboard` run locally, not on the deployment. See [Remote CLI limitations](#remote-cli-limitations). |
+
+Pick whichever suits the change — the [model-provider steps](#configure-your-model-provider) above, for example, use `/bash` (onboarding) or Raw Mode (manual edits).
+
+> Whichever you use, keep secrets out of `openclaw.json` — see [Security](#security).
 
 ## Persistent storage
 
@@ -95,7 +147,7 @@ The CLI talks to the gateway over its WebSocket API; it is not a shell inside th
 
 Installation and setup commands — `config`, `plugins`, `skills`, `models`, `onboard`, and similar — act on the machine the CLI runs on, not the remote gateway. They complete without error even with remote mode configured.
 
-To change the deployment, use the control UI, or ask the agent — it can install plugins and edit `openclaw.json` inside the container. With [git sync](#git-sync-optional) enabled, workspace files and `openclaw.json` can also be edited through the `workspace-sync` branch. For low-level access, [`openclaw gateway call`](https://docs.openclaw.ai/cli/gateway) invokes gateway RPC methods directly.
+To change the deployment itself, use one of the methods in [Editing the configuration](#editing-the-configuration) — ask the agent, the control UI, `/bash`, or the git-sync branch. For low-level access, [`openclaw gateway call`](https://docs.openclaw.ai/cli/gateway) invokes gateway RPC methods directly.
 
 **Reference:** [Installation](https://docs.openclaw.ai/install) · [Remote gateway](https://docs.openclaw.ai/gateway/remote) · [Devices & pairing](https://docs.openclaw.ai/cli/devices)
 
@@ -112,7 +164,7 @@ On first sync, the agent's current workspace becomes the first commit on a new `
 
 **What syncs:** the agent's `workspace/` directory, its `openclaw.json` configuration, and `skills/`. Runtime state — credentials, sessions, and scheduled jobs — stays local to the container and is never committed.
 
-> **Do not put secrets in `openclaw.json`.** Because that file is synced to your repository, any API key or token entered into the control UI's configuration or skill fields would be pushed to the branch in plaintext. Keep secrets in your Hyperlift environment variables instead.
+> **Never put secrets in `openclaw.json`.** With sync on, anything in that file is pushed to your repository in plaintext — keep API keys and tokens in your Hyperlift environment variables instead. See [Security](#security).
 
 **Edit the workspace from your machine:**
 
@@ -132,8 +184,17 @@ Then tell the agent `"pull from git"` and it picks up your changes. Ask it to `"
 - **Portable.** The branch is the workspace's durable, off-cluster copy: point a new app at the same repo and it comes up with the agent's memory, personality, and config intact.
 - **Conflict-safe.** If changes can't merge cleanly, the agent keeps the remote and saves its divergent work on a `backup/<timestamp>` branch — nothing is overwritten.
 
+## Security
+
+The gateway and its web chat are served on a public URL, so treat the deployment as internet-facing:
+
+- **Set a strong, unique gateway password and rotate it regularly.** It's the only thing between the public internet and your agent.
+- **Keep secrets in environment variables, not in `openclaw.json`.** OpenClaw reads keys such as `OPENAI_API_KEY` straight from the environment, and can substitute env values into the config where you do need to reference them — so a secret rarely has to live in the file itself. This matters doubly with [git sync](#git-sync-optional), which would push anything in `openclaw.json` to your repository in plaintext.
+- **Disable what you don't use.** This template turns on the unrestricted `/bash` command in the web chat so you can run provider onboarding (see [Configure your model provider](#configure-your-model-provider)). Once that's done, switch it off — set `commands.bash` to `false` in the live config — so a compromised UI can't run arbitrary commands on the host. The restricted `/crestodian` diagnostic commands keep working regardless.
+
 ## Troubleshooting
 
+- **A provider or its models don't appear after you set them up.** Confirm the plugin is enabled and the key is set (see [Configure your model provider](#configure-your-model-provider)), then restart the app from the Hyperlift manager. If it still misbehaves, run `/bash openclaw doctor --fix` from the web chat — or the `/crestodian doctor fix` (then `/crestodian yes`) if you've turned `/bash` off — to repair common configuration problems.
 - **Git sync is not working.** Check the container logs. The most common causes are an expired PAT, an SSH-form URL instead of HTTPS, or a PAT missing **Contents: read and write**. If the remote cannot be reached, the container falls back to local-only mode and keeps running.
 - **The CLI reports `protocol error`.** The CLI and gateway versions differ — install the version this template pins (see [Connect the OpenClaw CLI](#connect-the-openclaw-cli)).
 - **The CLI reports `pairing required` or `scope upgrade pending`.** Approve the device in the control UI under **Nodes → Devices**.
