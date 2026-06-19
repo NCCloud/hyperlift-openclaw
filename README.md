@@ -49,7 +49,7 @@ OpenClaw supports many more providers; you just enable and configure them yourse
 ```
 
 - Swap `--auth-choice` and `--<provider>-api-key` for your provider — the [provider docs](https://docs.openclaw.ai/providers) list the exact names.
-- The `--gateway-*` flags are required even though Hyperlift already sets these; `onboard` refuses to run without them. `OPENCLAW_GATEWAY_PASSWORD` is already in the environment, so the command works as-is.
+- The `--gateway-*` flags are required even though Hyperlift already sets these; `onboard` refuses to run without them. The escaped `\$` is intentional — it stores `${OPENCLAW_GATEWAY_PASSWORD}` in `openclaw.json` as a reference that OpenClaw resolves from the environment at runtime, so the real password never lands in the file.
 - `--accept-risk` and `--non-interactive` let it run unattended from the chat.
 
 **Alternative — configure it by hand.** [Edit the live `openclaw.json`](#editing-the-configuration) and:
