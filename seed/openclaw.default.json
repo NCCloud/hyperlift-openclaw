@@ -18,7 +18,26 @@
       "sandbox": {
         "mode": "off"
       }
-    }
+    },
+    "list": [
+      {
+        "id": "main",
+        "tools": {
+          "elevated": {
+            "enabled": true,
+            "allowFrom": {
+              "webchat": [
+                "*"
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "commands": {
+    "bash": true,
+    "plugins": true
   },
   "update": {
     "checkOnStart": false
@@ -198,7 +217,15 @@
     "dmScope": "per-channel-peer"
   },
   "tools": {
-    "profile": "coding"
+    "profile": "coding",
+    "elevated": {
+      "enabled": true,
+      "allowFrom": {
+        "webchat": [
+          "*"
+        ]
+      }
+    }
   },
   "auth": {
     "profiles": {
