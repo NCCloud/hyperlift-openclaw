@@ -1,0 +1,13 @@
+{
+  "id": "device-autopair",
+  "name": "Device Auto-Pair",
+  "description": "Approve browser control-UI device pairing requests automatically, so a password-authenticated browser can reach a gateway whose approval surfaces are unreachable.",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

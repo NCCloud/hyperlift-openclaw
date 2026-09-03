@@ -6,9 +6,12 @@
     "auth": {
       "mode": "password"
     },
+    "trustedProxies": [
+      "10.0.0.0/8",
+      "172.16.0.0/12",
+      "192.168.0.0/16"
+    ],
     "controlUi": {
-      "allowInsecureAuth": true,
-      "dangerouslyDisableDeviceAuth": true,
       "dangerouslyAllowHostHeaderOriginFallback": true
     }
   },
@@ -19,9 +22,8 @@
         "mode": "off"
       }
     },
-    "list": [
-      {
-        "id": "main",
+    "entries": {
+      "main": {
         "tools": {
           "elevated": {
             "enabled": true,
@@ -33,7 +35,7 @@
           }
         }
       }
-    ]
+    }
   },
   "commands": {
     "bash": true,
@@ -58,19 +60,7 @@
       "anthropic": {
         "enabled": true
       },
-      "arcee": {
-        "enabled": false
-      },
-      "byteplus": {
-        "enabled": false
-      },
-      "cerebras": {
-        "enabled": false
-      },
-      "chutes": {
-        "enabled": false
-      },
-      "cloudflare-ai-gateway": {
+      "clawrouter": {
         "enabled": false
       },
       "codex": {
@@ -79,34 +69,16 @@
       "copilot-proxy": {
         "enabled": false
       },
-      "deepinfra": {
-        "enabled": false
-      },
-      "deepseek": {
-        "enabled": false
-      },
-      "fireworks": {
-        "enabled": false
+      "device-autopair": {
+        "enabled": true
       },
       "github-copilot": {
-        "enabled": false
-      },
-      "gmi": {
         "enabled": false
       },
       "google": {
         "enabled": true
       },
-      "groq": {
-        "enabled": false
-      },
       "huggingface": {
-        "enabled": false
-      },
-      "kilocode": {
-        "enabled": false
-      },
-      "kimi": {
         "enabled": false
       },
       "litellm": {
@@ -127,12 +99,6 @@
       "mistral": {
         "enabled": true
       },
-      "moonshot": {
-        "enabled": false
-      },
-      "novita": {
-        "enabled": false
-      },
       "nvidia": {
         "enabled": false
       },
@@ -142,59 +108,23 @@
       "openai": {
         "enabled": true
       },
-      "opencode": {
-        "enabled": false
-      },
       "opencode-go": {
         "enabled": false
       },
       "openrouter": {
         "enabled": true
       },
-      "qianfan": {
-        "enabled": false
-      },
-      "qwen": {
-        "enabled": false
-      },
       "sglang": {
-        "enabled": false
-      },
-      "stepfun": {
-        "enabled": false
-      },
-      "synthetic": {
-        "enabled": false
-      },
-      "tencent": {
         "enabled": false
       },
       "together": {
         "enabled": false
       },
-      "venice": {
-        "enabled": false
-      },
-      "vercel-ai-gateway": {
-        "enabled": false
-      },
       "vllm": {
-        "enabled": false
-      },
-      "volcengine": {
-        "enabled": false
-      },
-      "vydra": {
         "enabled": false
       },
       "xai": {
         "enabled": true
-      },
-      "xiaomi": {
-        "enabled": false
-      },
-      "zai": {
-        "enabled": false
       }
     }
   },
@@ -275,7 +205,13 @@
       "blucli": {
         "enabled": false
       },
+      "browser-automation": {
+        "enabled": false
+      },
       "camsnap": {
+        "enabled": false
+      },
+      "canvas": {
         "enabled": false
       },
       "clawhub": {
@@ -284,7 +220,7 @@
       "coding-agent": {
         "enabled": false
       },
-      "discord": {
+      "diagram-maker": {
         "enabled": false
       },
       "eightctl": {
@@ -308,13 +244,16 @@
       "goplaces": {
         "enabled": false
       },
+      "healthcheck": {
+        "enabled": false
+      },
       "himalaya": {
         "enabled": false
       },
-      "imsg": {
+      "mcporter": {
         "enabled": false
       },
-      "mcporter": {
+      "meme-maker": {
         "enabled": false
       },
       "model-usage": {
@@ -323,10 +262,22 @@
       "nano-pdf": {
         "enabled": false
       },
+      "node-connect": {
+        "enabled": false
+      },
+      "node-inspect-debugger": {
+        "enabled": false
+      },
+      "notion": {
+        "enabled": false
+      },
       "obsidian": {
         "enabled": false
       },
       "openai-whisper": {
+        "enabled": false
+      },
+      "openai-whisper-api": {
         "enabled": false
       },
       "openhue": {
@@ -341,6 +292,9 @@
       "peekaboo": {
         "enabled": false
       },
+      "python-debugpy": {
+        "enabled": false
+      },
       "sag": {
         "enabled": false
       },
@@ -350,7 +304,7 @@
       "sherpa-onnx-tts": {
         "enabled": false
       },
-      "slack": {
+      "skill-creator": {
         "enabled": false
       },
       "songsee": {
@@ -359,10 +313,19 @@
       "sonoscli": {
         "enabled": false
       },
+      "spike": {
+        "enabled": false
+      },
       "spotify-player": {
         "enabled": false
       },
       "summarize": {
+        "enabled": false
+      },
+      "taskflow": {
+        "enabled": false
+      },
+      "taskflow-inbox-triage": {
         "enabled": false
       },
       "things-mac": {
@@ -377,10 +340,7 @@
       "video-frames": {
         "enabled": false
       },
-      "voice-call": {
-        "enabled": false
-      },
-      "wacli": {
+      "weather": {
         "enabled": false
       },
       "xurl": {
@@ -391,79 +351,10 @@
   "models": {
     "mode": "merge",
     "providers": {
-      "xai": {
-        "baseUrl": "https://api.x.ai/v1",
-        "api": "openai-responses",
-        "models": [
-          {
-            "id": "grok-build-0.1",
-            "name": "Grok Build 0.1",
-            "reasoning": true,
-            "input": [
-              "text",
-              "image"
-            ],
-            "cost": {
-              "input": 1,
-              "output": 2,
-              "cacheRead": 0.2,
-              "cacheWrite": 0
-            },
-            "contextWindow": 256000,
-            "maxTokens": 64000
-          },
-          {
-            "id": "grok-4.3",
-            "name": "Grok 4.3",
-            "reasoning": true,
-            "input": [
-              "text",
-              "image"
-            ],
-            "cost": {
-              "input": 1.25,
-              "output": 2.5,
-              "cacheRead": 0.2,
-              "cacheWrite": 0
-            },
-            "contextWindow": 1000000,
-            "maxTokens": 64000
-          },
-          {
-            "id": "grok-4.20-beta-latest-reasoning",
-            "name": "Grok 4.20 Beta Latest (Reasoning)",
-            "reasoning": true,
-            "input": [
-              "text",
-              "image"
-            ],
-            "cost": {
-              "input": 1.25,
-              "output": 2.5,
-              "cacheRead": 0.2,
-              "cacheWrite": 0
-            },
-            "contextWindow": 2000000,
-            "maxTokens": 30000
-          },
-          {
-            "id": "grok-4.20-beta-latest-non-reasoning",
-            "name": "Grok 4.20 Beta Latest (Non-Reasoning)",
-            "reasoning": false,
-            "input": [
-              "text",
-              "image"
-            ],
-            "cost": {
-              "input": 1.25,
-              "output": 2.5,
-              "cacheRead": 0.2,
-              "cacheWrite": 0
-            },
-            "contextWindow": 2000000,
-            "maxTokens": 30000
-          }
-        ]
+      "openai": {
+        "agentRuntime": {
+          "id": "openclaw"
+        }
       }
     }
   }

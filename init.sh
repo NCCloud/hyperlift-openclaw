@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 #
-# Container entrypoint: prepare the OpenClaw state dir — optionally syncing it to a
-# `workspace-sync` git branch when WORKSPACE_GIT_TOKEN + WORKSPACE_GIT_URL are set —
-# then exec the gateway. Keep OPENCLAW_STATE_DIR under /home/node (the persistent
-# volume) so state survives restarts.
+# Entrypoint: set up the OpenClaw state dir, sync it to git when asked, then
+# start the gateway. State lives under /home/node, the persistent volume.
 
 set -uo pipefail
 
@@ -12,6 +10,8 @@ SEED_CONFIG="/app/seed/openclaw.default.json"
 SEED_WORKSPACE="/app/seed/workspace"
 SEED_GITIGNORE="/app/seed/workspace-sync.gitignore"
 SEED_SKILLS="/app/seed/skills"
+VERSION_FILE="$STATE_DIR/.template-openclaw-version"
+OPENCLAW_VERSION="$(openclaw --version 2>/dev/null | head -1)"
 
 log()  { printf 'init: %s\n'          "$*" >&2; }
 warn() { printf 'init: WARNING: %s\n' "$*" >&2; }
@@ -20,7 +20,7 @@ have_sync_env() {
   [ -n "${WORKSPACE_GIT_TOKEN:-}" ] && [ -n "${WORKSPACE_GIT_URL:-}" ]
 }
 
-# Store the PAT for HTTPS git auth; persists on the volume so git works without the env var.
+# Save the PAT on the volume so git auth keeps working without the env var.
 setup_credentials() {
   git config --global user.name "openclaw-agent" || return 1
   git config --global user.email "agent@openclaw.local" || return 1
@@ -31,16 +31,14 @@ setup_credentials() {
 
 clear_credentials() { rm -f ~/.git-credentials; }
 
-# Seed the git-sync skill into $STATE_DIR/skills — beside workspace/, not inside it
-# (a skill under workspace/ makes OpenClaw skip the first-run ritual).
+# A skill inside workspace/ makes OpenClaw skip first-run setup, so seed beside it.
 seed_managed_skills() {
   [ -d "$SEED_SKILLS" ] || return 0
   [ -d "$STATE_DIR/skills" ] && return 0
   cp -r "$SEED_SKILLS" "$STATE_DIR/skills" || { warn "could not seed the git-sync skill"; return 1; }
 }
 
-# Seed workspace/ when empty, not just when absent: the base image ships an empty
-# workspace/ that a `[ -d ]` test would mistake for seeded. `/.` copies contents.
+# The base image ships an empty workspace/, so test for empty, not for missing.
 seed_workspace_if_empty() {
   [ -n "$(ls -A workspace 2>/dev/null)" ] && return 0
   mkdir -p workspace || return 1
@@ -49,9 +47,65 @@ seed_workspace_if_empty() {
 
 # Seed config + workspace (required) and the skill (best-effort). Caller cd's to $STATE_DIR.
 seed_state() {
-  [ -f openclaw.json ] || cp "$SEED_CONFIG" openclaw.json || return 1
+  if [ ! -f openclaw.json ]; then
+    cp "$SEED_CONFIG" openclaw.json || return 1
+    # Record the version this config came from, so doctor is skipped below.
+    [ -z "$OPENCLAW_VERSION" ] || printf '%s\n' "$OPENCLAW_VERSION" > "$VERSION_FILE" || return 1
+  fi
   seed_workspace_if_empty || return 1
-  seed_managed_skills || true   # optional — never blocks boot
+  seed_managed_skills || true   # optional, never blocks boot
+}
+
+# Put back the two config keys nobody can log in without. Only fills in
+# missing keys, so anything the user set on purpose stays as it is.
+# - gateway.trustedProxies: without it the web UI is unreachable behind the
+#   Hyperlift ingress.
+# - plugins.entries.device-autopair: our plugin that approves browser logins.
+#   Without it every new browser is stuck at "pairing required". An explicit
+#   enabled: false is the user's choice and is left alone.
+# Runs on every boot because a deleted key (say, in the raw config editor)
+# locks the user out with no way back in. Everything else in the config is
+# the user's business.
+ensure_access_keys() {
+  [ -f "$STATE_DIR/openclaw.json" ] || return 0
+  node -e '
+    const fs = require("fs");
+    const p = process.argv[1];
+    const cfg = JSON.parse(fs.readFileSync(p, "utf8"));
+    const applied = [];
+    cfg.gateway = cfg.gateway || {};
+    if (!Array.isArray(cfg.gateway.trustedProxies)) {
+      cfg.gateway.trustedProxies = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"];
+      applied.push("gateway.trustedProxies");
+    }
+    cfg.plugins = cfg.plugins || {};
+    cfg.plugins.entries = cfg.plugins.entries || {};
+    const autopair = cfg.plugins.entries["device-autopair"];
+    if (autopair === undefined || autopair.enabled === undefined) {
+      cfg.plugins.entries["device-autopair"] = Object.assign({}, autopair, { enabled: true });
+      applied.push("plugins.entries.device-autopair");
+    }
+    if (!applied.length) process.exit(0);
+    fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + "\n");
+    console.error("init: restored access keys: " + applied.join(", "));
+  ' "$STATE_DIR/openclaw.json" || warn "could not restore the access keys"
+  return 0
+}
+
+# Run OpenClaw's own doctor --fix once when the image's OpenClaw version differs
+# from the one recorded on the volume, so OpenClaw can migrate its state.
+run_doctor_fix_on_version_change() {
+  local last=""
+  [ -n "$OPENCLAW_VERSION" ] || { warn "could not determine the OpenClaw version; skipping doctor --fix"; return 0; }
+  [ -f "$VERSION_FILE" ] && last="$(cat "$VERSION_FILE" 2>/dev/null)"
+  [ "$OPENCLAW_VERSION" = "$last" ] && return 0
+  log "OpenClaw version changed from '${last:-none}' to '$OPENCLAW_VERSION', running doctor --fix"
+  if openclaw doctor --fix --non-interactive; then
+    printf '%s\n' "$OPENCLAW_VERSION" > "$VERSION_FILE" || warn "could not record the OpenClaw version"
+  else
+    warn "doctor --fix reported problems, see the log above"
+  fi
+  return 0
 }
 
 # No git sync: seed the state dir so the gateway can boot standalone.
@@ -62,7 +116,7 @@ seed_local_only() {
   seed_state || return 1
   chmod -R 700 "$STATE_DIR" || return 1
   chmod 600 "$STATE_DIR/openclaw.json" || return 1
-  log "local-only mode — no git sync"
+  log "local-only mode, no git sync"
 }
 
 # Real local state worth preserving (non-empty workspace or a config file). Gate on
@@ -105,6 +159,13 @@ setup_sync() {
   mkdir -p "$STATE_DIR" || return 1
   cd "$STATE_DIR" || return 1
 
+  # OpenClaw 2026.8 or later runs git init in new workspaces, and a nested .git
+  # breaks the first `git add workspace`. Only drop it before that first add.
+  if [ -d workspace/.git ] && ! git ls-files --error-unmatch -- workspace >/dev/null 2>&1; then
+    log "removing workspace/.git so the first sync works"
+    rm -rf workspace/.git
+  fi
+
   if [ -d .git ]; then
     if git rev-parse --verify -q refs/heads/workspace-sync >/dev/null 2>&1; then
       [ "$(git remote get-url origin 2>/dev/null || true)" = "$WORKSPACE_GIT_URL" ] \
@@ -112,7 +173,7 @@ setup_sync() {
       log "sync already configured"
       return 0
     fi
-    warn "incomplete .git from an interrupted boot — re-initializing"
+    warn "incomplete .git from an interrupted boot, re-initializing"
     rm -rf .git
   fi
 
@@ -120,19 +181,19 @@ setup_sync() {
   local rc=0
   git ls-remote --exit-code --quiet "$WORKSPACE_GIT_URL" workspace-sync >/dev/null 2>&1 || rc=$?
   if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then
-    warn "cannot reach $WORKSPACE_GIT_URL — check the URL, token, and network"
+    warn "cannot reach $WORKSPACE_GIT_URL, check the URL, token, and network"
     return 1
   fi
 
-  git init -q || return 1            # in place — runtime state stays untouched
+  git init -q || return 1            # in place, runtime state stays untouched
   git remote add origin "$WORKSPACE_GIT_URL" || return 1
 
   if [ "$rc" -eq 0 ]; then
-    log "remote workspace-sync exists — backing up any local state, then adopting it"
+    log "remote workspace-sync exists, backing up local state then adopting it"
     preserve_local_to_backup || { rm -rf .git; return 1; }
     adopt_remote_sync        || { rm -rf .git; return 1; }
   else
-    log "remote workspace-sync missing — creating it from local state (or seed)"
+    log "remote workspace-sync missing, creating it from local state (or seed)"
     create_orphan_sync       || { rm -rf .git; return 1; }
   fi
 
@@ -155,6 +216,10 @@ main() {
   [ "$sync_ok" -eq 0 ] && { seed_local_only || { warn "could not seed workspace"; exit 1; }; }
 
   cd "$STATE_DIR" || exit 1
+  run_doctor_fix_on_version_change
+  # After doctor on purpose: doctor may rewrite plugin entries.
+  ensure_access_keys
+
   log "starting gateway: $*"
 
   # Run read only health checks (triggers catalog loading as a side effect)
