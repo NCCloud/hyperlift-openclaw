@@ -10,7 +10,7 @@ import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 
 const PLUGIN_ID = "device-autopair";
-const INTERVAL_MS = 10_000;
+const INTERVAL_MS = 5_000;
 
 function isOperatorRequest(request) {
   const roles = Array.isArray(request.roles) ? [...request.roles] : [];

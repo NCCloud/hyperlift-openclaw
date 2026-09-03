@@ -133,7 +133,7 @@ openclaw health
 openclaw agent --agent main --message "Say hi"
 ```
 
-`health` works right away. The first command that talks to the agent reports `pairing required: device is not approved yet`. The template's `device-autopair` plugin approves it within about ten seconds — wait a moment and run it again. If it stays pending, approve it manually under **Settings → Connections → Devices** → **Paired devices**.
+`health` works right away. The first command that talks to the agent reports `pairing required: device is not approved yet`. The template's `device-autopair` plugin approves it within about five seconds — wait a moment and run it again. If it stays pending, approve it manually under **Settings → Connections → Devices** → **Paired devices**.
 
 **4. Approve scope upgrades when prompted.** OpenClaw grants access per action, by [least-privilege design](https://docs.openclaw.ai/gateway/operator-scopes) — there is no way to pre-approve everything from the CLI. The first time you run a command that needs broader access — for example, messaging the agent:
 
@@ -199,7 +199,7 @@ The gateway and its web chat are served on a public URL, so treat the deployment
 - **A provider or its models don't appear after you set them up.** Confirm the plugin is enabled and the key is set (see [Configure your model provider](#configure-your-model-provider)), then restart the app from the Hyperlift manager. If it still misbehaves, run `/bash openclaw doctor --fix` from the web chat to repair common configuration problems. (`/openclaw doctor` gives a read-only diagnosis, but repairs refuse to run from the chat — if you've turned `/bash` off, re-enable it first.)
 - **Git sync is not working.** Check the container logs. The most common causes are an expired PAT, an SSH-form URL instead of HTTPS, or a PAT missing **Contents: read and write**. If the remote cannot be reached, the container falls back to local-only mode and keeps running.
 - **The CLI reports `protocol mismatch`.** The CLI and gateway versions differ — install the version this template pins (see [Connect the OpenClaw CLI](#connect-the-openclaw-cli)).
-- **The CLI reports `scope upgrade pending`.** Approve the device in the control UI under **Settings → Connections → Devices**. (A plain `pairing required` clears itself within ~10 seconds via `device-autopair` — just retry.)
+- **The CLI reports `scope upgrade pending`.** Approve the device in the control UI under **Settings → Connections → Devices**. (A plain `pairing required` clears itself within a few seconds via `device-autopair` — just retry.)
 - **A plugin/skill/config change made via the CLI doesn't show up in the deployment.** Install- and config-type commands act on the machine running the CLI, not the remote gateway. See [Remote CLI limitations](#remote-cli-limitations).
 - **`openclaw dashboard` or `openclaw gateway status` reports the gateway is not running.** Both check for a gateway on the local machine. Use `openclaw health` to check the deployment.
 - **Something installed in the `Dockerfile` is missing at runtime.** If the build wrote it under `/home/node` (plugins, skills, caches), the persistent volume mounts over it — install it after boot instead. See [Persistent storage](#persistent-storage).
