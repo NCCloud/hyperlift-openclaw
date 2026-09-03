@@ -25,7 +25,14 @@ See the [configuration reference](https://docs.openclaw.ai/gateway/configuration
 
 > **Note:** The agent's data lives at `/home/node/.openclaw` on the app's persistent volume. Leave `OPENCLAW_STATE_DIR` at its default — pointing it outside `/home/node` means the data won't survive a restart.
 
-Once deployed, open the gateway's URL, enter your gateway password in the **Password** field and click **Connect**. A brand-new browser gets a "device pairing" prompt on the first try — the deployment approves it within a few seconds, so just click **Connect** once more. The browser doesn't store the password, so a new session asks for it again. On the first visit the control UI may open **Model Setup** instead of the chat. Your provider's key is already there under **Found on this Gateway** — click **Test & use**, and once it verifies the model you can start chatting.
+## Log in
+
+1. Open the app URL, enter your gateway password in the **Password** field and click **Connect**.
+2. The first time from a new browser you get a red **Device pairing required** box with CLI instructions. Ignore the instructions: the template's `device-autopair` plugin approves the browser within a few seconds. Click **Connect** once more and you are in.
+3. The browser does not store the password, so a new session asks for it again. The pairing is remembered per browser.
+
+On the first visit the control UI may open **Model Setup** instead of the chat, or the model picker may say **No models available**. Your provider's key is already there: click **Test & use** (or **Check model** when a model is already selected), and once it verifies the model you can start chatting.
+
 
 ## Configure your model provider
 
@@ -123,9 +130,10 @@ Use your gateway's public `wss://` URL and the credential it is configured with 
 
 ```bash
 openclaw health
+openclaw agent --agent main --message "Say hi"
 ```
 
-On first use this reports `pairing required: device is not approved yet`. The template's `device-autopair` plugin approves it within about ten seconds — wait a moment and run `openclaw health` again. If it stays pending, approve it manually under **Settings → Connections → Devices** → **Paired devices**.
+`health` works right away. The first command that talks to the agent reports `pairing required: device is not approved yet`. The template's `device-autopair` plugin approves it within about ten seconds — wait a moment and run it again. If it stays pending, approve it manually under **Settings → Connections → Devices** → **Paired devices**.
 
 **4. Approve scope upgrades when prompted.** OpenClaw grants access per action, by [least-privilege design](https://docs.openclaw.ai/gateway/operator-scopes) — there is no way to pre-approve everything from the CLI. The first time you run a command that needs broader access — for example, messaging the agent:
 
