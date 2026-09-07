@@ -36,7 +36,7 @@ On the first visit the control UI may open **Model Setup** instead of the chat, 
 
 ## Configure your model provider
 
-The template ships with six providers enabled and tested — **Anthropic, Google, Mistral, OpenAI, OpenRouter, and xAI**. Using one of these is the easy path; any other provider takes a few extra steps on the running deployment. (OpenClaw 2026.8 stopped bundling the Mistral plugin, so this template's `Dockerfile` bakes the official `@openclaw/mistral-provider` package back into the image — Mistral keeps working out of the box.)
+The template ships with six providers enabled and tested — **Anthropic, Google, Mistral, OpenAI, OpenRouter, and xAI**. Using one of these is the easy path; any other provider takes a few extra steps on the running deployment. (Mistral is not part of the OpenClaw image, so this template's `Dockerfile` adds the official `@openclaw/mistral-provider` package to it.)
 
 ### A preconfigured provider (recommended)
 
@@ -48,7 +48,7 @@ To switch to a different one of the six later, add that provider's key (e.g. `AN
 
 OpenClaw supports many more providers; you just enable and configure them yourself. The full list and per-provider settings are in the [OpenClaw provider docs](https://docs.openclaw.ai/providers).
 
-**Recommended — run onboarding from the chat.** This template enables the `/bash` command in the web chat, which runs commands inside the container (Hyperlift gives no SSH access, so this is how you run commands in the deployment). Since OpenClaw 2026.8, most extra providers ship as separate packages, so the flow is: add your provider's API key in the Hyperlift manager, install its plugin, then run `onboard` — it configures the plugin, populates the model catalog, and sets the agent's default model in one step. For Cerebras:
+**Recommended — run onboarding from the chat.** This template enables the `/bash` command in the web chat, which runs commands inside the container (Hyperlift gives no SSH access, so this is how you run commands in the deployment). Most extra providers ship as separate packages, so the flow is: add your provider's API key in the Hyperlift manager, install its plugin, then run `onboard` — it configures the plugin, populates the model catalog, and sets the agent's default model in one step. For Cerebras:
 
 ```text
 /bash openclaw plugins install @openclaw/cerebras-provider --accept-capabilities
@@ -190,9 +190,9 @@ Then tell the agent `"pull from git"` and it picks up your changes. Ask it to `"
 
 The gateway and its web chat are served on a public URL, so treat the deployment as internet-facing:
 
-- **Set a strong, unique gateway password and rotate it regularly.** It's the only thing between the public internet and your agent. OpenClaw 2026.8 added a second gate — a one-time approval for each new browser — but granting it needs a shell on the gateway host or an already-paired browser, and a Hyperlift deployment has neither. So this template ships a small `device-autopair` plugin (`plugins/device-autopair/`) that approves those requests for you. Pairing requests only exist after a client got the password right, so this restores the same model the previous OpenClaw version had: password = access. The plugin only feeds `operator`-role requests into the gateway's own approval lane and logs every device it admits; node enrollments — which grant host command execution — stay manual under **Settings → Connections → Devices**. To turn it off, set `plugins.entries.device-autopair.enabled` to `false` in the config — but then plan for how you will approve your first browser.
+- **Set a strong, unique gateway password and rotate it regularly.** It is the only thing between the public internet and your agent. OpenClaw also asks for a one-time approval of every new browser. Approving normally takes a shell on the gateway or an already approved browser, which a fresh Hyperlift deployment does not have, so the template's `device-autopair` plugin approves those requests for you. Node enrollments stay manual under **Settings → Connections → Devices**. You can turn the plugin off by setting `plugins.entries.device-autopair.enabled` to `false`; new browsers then need approval from a browser that is already paired.
 - **Keep secrets in environment variables, not in `openclaw.json`.** OpenClaw reads keys such as `OPENAI_API_KEY` straight from the environment, and can substitute env values into the config where you do need to reference one — so a secret rarely has to live in the file at all, which also keeps it out of [git sync](#git-sync-optional).
-- **Disable what you don't use.** This template turns on the unrestricted `/bash` command in the web chat so you can run provider onboarding (see [Configure your model provider](#configure-your-model-provider)). Once that's done, switch it off — set `commands.bash` to `false` in the live config — so a compromised UI can't run arbitrary commands in the container. Guided setup and diagnosis stay available through [`/openclaw`](https://docs.openclaw.ai/cli/openclaw), the restricted setup helper (formerly `/crestodian`) — but know that doctor *repairs* refuse to run from the chat, so if you ever need one, re-enable `commands.bash` first (Settings → System → Advanced, Raw mode), run it, and switch it off again.
+- **Disable what you don't use.** The template turns on the unrestricted `/bash` command in the web chat for provider onboarding (see [Configure your model provider](#configure-your-model-provider)). Once done, set `commands.bash` to `false` in the config so a compromised UI cannot run commands in the container. Questions and diagnosis still work through [`/openclaw`](https://docs.openclaw.ai/cli/openclaw); repairs need `/bash`.
 
 ## Troubleshooting
 
