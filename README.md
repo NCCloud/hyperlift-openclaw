@@ -1,6 +1,6 @@
 # OpenClaw Hyperlift Template
 
-A ready-to-deploy [OpenClaw](https://docs.openclaw.ai/) agent gateway for [Spaceship Hyperlift](https://hyperlift.spaceship.com). Deploy to run a hosted AI agent with a web control UI. The agent's workspace — its memory, personality, and configuration — persists on the deployment's volume, and can optionally sync to a branch of your own GitHub repository so you can edit it from your machine and keep your own backup.
+A ready-to-deploy [OpenClaw](https://docs.openclaw.ai/) agent gateway for [Spaceship Hyperlift](https://www.spaceship.com/starlight-cloud/hyperlift/). Deploy to run a hosted AI agent with a web control UI. The agent's workspace — its memory, personality, and configuration — persists on the deployment's volume, and can optionally sync to a branch of your own GitHub repository so you can edit it from your machine and keep your own backup.
 
 ## What's included
 
@@ -25,36 +25,43 @@ See the [configuration reference](https://docs.openclaw.ai/gateway/configuration
 
 > **Note:** The agent's data lives at `/home/node/.openclaw` on the app's persistent volume. Leave `OPENCLAW_STATE_DIR` at its default — pointing it outside `/home/node` means the data won't survive a restart.
 
-Once deployed, open the gateway's URL, sign in with your gateway password, and start chatting with your agent.
+## Log in
+
+1. Open the app URL, enter your gateway password in the **Password** field and click **Connect**.
+2. The first time from a new browser you get a red **Device pairing required** box with CLI instructions. Ignore the instructions: the template's `device-autopair` plugin approves the browser within a few seconds. Click **Connect** once more and you are in.
+3. The browser does not store the password, so a new session asks for it again. The pairing is remembered per browser.
+
+On the first visit the control UI may open **Model Setup** instead of the chat, or the model picker may say **No models available**. Your provider's key is already there: click **Test & use** (or **Check model** when a model is already selected), and once it verifies the model you can start chatting.
+
 
 ## Configure your model provider
 
-The template ships with six providers enabled and tested — **Anthropic, Google, Mistral, OpenAI, OpenRouter, and xAI**. Using one of these is the easy path; any other provider takes a few extra steps on the running deployment.
+The template ships with six providers enabled and tested — **Anthropic, Google, Mistral, OpenAI, OpenRouter, and xAI**. Using one of these is the easy path; any other provider takes a few extra steps on the running deployment. (Mistral is not part of the OpenClaw image, so this template's `Dockerfile` adds the official `@openclaw/mistral-provider` package to it.)
 
 ### A preconfigured provider (recommended)
 
-Pick your provider when you create the app and enter its API key. Its plugin is already on, so its models show up in the control UI — open the model picker and choose the one the agent should use. That's all.
+Pick your provider when you create the app and enter its API key. Its plugin is already on, so its models show up in the control UI — set the agent's default under **Settings → Agents & Tools → Models → Default model** and **Save** (or let the first-run **Model Setup** page do it). That's all. The **Chat model** control next to the message box only overrides the model for the current chat.
 
-To switch to a different one of the six later, add that provider's key (e.g. `ANTHROPIC_API_KEY`) in the [Hyperlift manager](https://www.spaceship.com/application/hyperlift-manager/) and select its model in the UI.
+To switch to a different one of the six later, add that provider's key (e.g. `ANTHROPIC_API_KEY`) in the [Hyperlift manager](https://www.spaceship.com/application/hyperlift-manager/) and select its model under **Settings → Agents & Tools → Models**.
 
 ### Another provider
 
 OpenClaw supports many more providers; you just enable and configure them yourself. The full list and per-provider settings are in the [OpenClaw provider docs](https://docs.openclaw.ai/providers).
 
-**Recommended — run onboarding from the chat.** This template enables the `/bash` command in the web chat, which runs commands inside the container (Hyperlift gives no SSH access, so this is how you run commands in the deployment). Add your provider's API key in the Hyperlift manager, then enable the plugin and run `onboard` — it configures the plugin, populates the model catalog, and sets the agent's default model in one step. For Cerebras:
+**Recommended — run onboarding from the chat.** This template enables the `/bash` command in the web chat, which runs commands inside the container (Hyperlift gives no SSH access, so this is how you run commands in the deployment). Most extra providers ship as separate packages, so the flow is: add your provider's API key in the Hyperlift manager, install its plugin, then run `onboard` — it configures the plugin, populates the model catalog, and sets the agent's default model in one step. For Cerebras:
 
 ```text
-/plugins enable cerebras
+/bash openclaw plugins install @openclaw/cerebras-provider --accept-capabilities
 /bash openclaw onboard --auth-choice cerebras-api-key --cerebras-api-key "$CEREBRAS_API_KEY" --gateway-auth=password --gateway-password="\${OPENCLAW_GATEWAY_PASSWORD}" --gateway-bind=lan --skip-skills --skip-ui --accept-risk --non-interactive
 ```
 
 - Swap `--auth-choice` and `--<provider>-api-key` for your provider — the [provider docs](https://docs.openclaw.ai/providers) list the exact names.
-- The `--gateway-*` flags are required even though Hyperlift already sets these; `onboard` refuses to run without them. The escaped `\$` is intentional — it stores `${OPENCLAW_GATEWAY_PASSWORD}` in `openclaw.json` as a reference that OpenClaw resolves from the environment at runtime, so the real password never lands in the file.
+- The `--gateway-*` flags matter even though Hyperlift already sets these: without them, `onboard` rewrites your gateway auth to a generated token and the password stops working. The escaped `\$` is intentional — it stores `${OPENCLAW_GATEWAY_PASSWORD}` in `openclaw.json` as a reference that OpenClaw resolves from the environment at runtime, so the real password never lands in the file.
 - `--accept-risk` and `--non-interactive` let it run unattended from the chat.
 
 **Alternative — configure it by hand.** [Edit the live `openclaw.json`](#editing-the-configuration) and:
 
-1. Enable the plugin — set `plugins.entries.<provider>.enabled` to `true`.
+1. Install the plugin: `/bash openclaw plugins install @openclaw/<provider>-provider --accept-capabilities` (installing also enables it; the six preconfigured providers are already built into the image).
 2. Add the provider's API key as an environment variable in the Hyperlift manager.
 3. If its models don't appear, add them by hand under `models.providers` and set `agents.defaults.model` — the [provider docs](https://docs.openclaw.ai/providers) include a sample config for each.
 4. Still not working? Restart the app from the Hyperlift manager; if it persists, see [Troubleshooting](#troubleshooting).
@@ -68,12 +75,12 @@ Almost everything about the deployment lives in `openclaw.json` — the model, e
 | Method | Where | Good for |
 |---|---|---|
 | **Ask the agent** | Plain language in the web chat | The simplest and most common approach — say what you want ("enable the Cerebras plugin", "switch to model X", "add a skill for Y") and the agent edits `openclaw.json` and applies it for you. It runs inside the container, so it can't set Hyperlift env vars — add API keys there yourself. |
-| **Control UI — Raw Mode** | **Settings → Advanced → Raw Mode → Raw config** in the gateway | Editing `openclaw.json` by hand from the browser; nothing to install. |
+| **Control UI — raw config editor** | **Settings → System → Advanced** in the gateway, then switch the editor to **Raw** | Editing `openclaw.json` by hand from the browser; nothing to install. Reveal the redacted values with the eye button before editing, then **Save**. |
 | **`/bash` in the web chat** | Type `/bash openclaw …` in the chat | Running OpenClaw commands inside the container yourself — `onboard`, `plugins enable`, `config set`. They take effect on the deployment. |
 | **Git-sync branch** | The `workspace-sync` branch, edited from your machine | Versioned, off-cluster edits to `openclaw.json` and workspace files. Requires [git sync](#git-sync-optional). |
 | **Remote CLI** | The `openclaw` CLI on your machine | *Operating* the gateway (health, logs, messaging) — **not** config: `config`/`plugins`/`onboard` run locally, not on the deployment. See [Remote CLI limitations](#remote-cli-limitations). |
 
-Pick whichever suits the change — the [model-provider steps](#configure-your-model-provider) above, for example, use `/bash` (onboarding) or Raw Mode (manual edits). Whichever you use, keep secrets out of `openclaw.json` — see [Security](#security).
+Pick whichever suits the change — the [model-provider steps](#configure-your-model-provider) above, for example, use `/bash` (onboarding) or the raw config editor (manual edits). Whichever you use, keep secrets out of `openclaw.json` — see [Security](#security).
 
 ## Persistent storage
 
@@ -95,10 +102,10 @@ To install anything that lives under `/home/node`, do it after the volume is mou
 
 You can operate your deployed gateway from your own machine with the OpenClaw CLI; a local gateway is not required.
 
-**1. Install the matching version.** The CLI and gateway must run the same OpenClaw version, otherwise the connection fails with a protocol error. See the `Dockerfile`, or the version shown in the control UI. Install that version with npm — Node 24 is recommended and Node 22+ is supported, per the [installation guide](https://docs.openclaw.ai/install):
+**1. Install the matching version.** Install the version the image pins (see the `Dockerfile`, or the version shown in the control UI) — a CLI that speaks a different gateway wire protocol is rejected at connect with `protocol mismatch`, and matching the pinned version is the reliable way to avoid that. Node 26 is recommended; Node 22.22.3+, 24.15+, or 25.9+ are supported, per the [installation guide](https://docs.openclaw.ai/install):
 
 ```bash
-npm install -g openclaw@2026.6.8
+npm install -g openclaw@2026.8.2
 ```
 
 **2. Point the CLI at your gateway.** Configure [remote gateway mode](https://docs.openclaw.ai/gateway/remote):
@@ -123,9 +130,10 @@ Use your gateway's public `wss://` URL and the credential it is configured with 
 
 ```bash
 openclaw health
+openclaw agent --agent main --message "Say hi"
 ```
 
-On first use this reports `pairing required: device is not approved yet`. In the control UI, open **Nodes → Devices**, locate the pending request, and click **Approve**. Run `openclaw health` again and it connects.
+`health` works right away. The first command that talks to the agent reports `pairing required: device is not approved yet`. The template's `device-autopair` plugin approves it within about five seconds — wait a moment and run it again. If it stays pending, approve it manually under **Settings → Connections → Devices** → **Paired devices**.
 
 **4. Approve scope upgrades when prompted.** OpenClaw grants access per action, by [least-privilege design](https://docs.openclaw.ai/gateway/operator-scopes) — there is no way to pre-approve everything from the CLI. The first time you run a command that needs broader access — for example, messaging the agent:
 
@@ -133,13 +141,13 @@ On first use this reports `pairing required: device is not approved yet`. In the
 openclaw agent --agent main --message "hello from the cli"
 ```
 
-you may see `scope upgrade pending approval`. Approve it the same way, under **Nodes → Devices**. Routine use afterward does not prompt again unless an action requires a new scope.
+you will see `scope upgrade pending approval`. Approve it under **Settings → Connections → Devices** — the `device-autopair` plugin deliberately never auto-approves upgrades for an already-paired device, so this one is always a manual click. Routine use afterward does not prompt again unless an action requires a new scope.
 
 ### Remote CLI limitations
 
 The CLI talks to the gateway over its WebSocket API; it is not a shell inside the container. Use it to operate the running gateway: check `health`, tail `logs`, message the agent (`agent --message …`), manage `cron` jobs, approve `devices`.
 
-Installation and setup commands — `config`, `plugins`, `skills`, `models`, `onboard`, and similar — act on the machine the CLI runs on, not the remote gateway. They complete without error even with remote mode configured.
+Installation and setup commands — `config`, `plugins`, `models`, `onboard`, and similar — act on the machine the CLI runs on, not the remote gateway. They complete without error even with remote mode configured.
 
 To change the deployment itself, use one of the methods in [Editing the configuration](#editing-the-configuration) — ask the agent, the control UI, `/bash`, or the git-sync branch. For low-level access, [`openclaw gateway call`](https://docs.openclaw.ai/cli/gateway) invokes gateway RPC methods directly.
 
@@ -182,20 +190,20 @@ Then tell the agent `"pull from git"` and it picks up your changes. Ask it to `"
 
 The gateway and its web chat are served on a public URL, so treat the deployment as internet-facing:
 
-- **Set a strong, unique gateway password and rotate it regularly.** It's the only thing between the public internet and your agent.
+- **Set a strong, unique gateway password and rotate it regularly.** It is the only thing between the public internet and your agent. OpenClaw also asks for a one-time approval of every new browser. Approving normally takes a shell on the gateway or an already approved browser, which a fresh Hyperlift deployment does not have, so the template's `device-autopair` plugin approves those requests for you. Node enrollments stay manual under **Settings → Connections → Devices**. You can turn the plugin off by setting `plugins.entries.device-autopair.enabled` to `false`; new browsers then need approval from a browser that is already paired.
 - **Keep secrets in environment variables, not in `openclaw.json`.** OpenClaw reads keys such as `OPENAI_API_KEY` straight from the environment, and can substitute env values into the config where you do need to reference one — so a secret rarely has to live in the file at all, which also keeps it out of [git sync](#git-sync-optional).
-- **Disable what you don't use.** This template turns on the unrestricted `/bash` command in the web chat so you can run provider onboarding (see [Configure your model provider](#configure-your-model-provider)). Once that's done, switch it off — set `commands.bash` to `false` in the live config — so a compromised UI can't run arbitrary commands in the container. You can still repair and reconfigure the deployment with [`/crestodian`](https://docs.openclaw.ai/cli/crestodian), OpenClaw's restricted setup-and-repair command surface, which works regardless.
+- **Disable what you don't use.** The template turns on the unrestricted `/bash` command in the web chat for provider onboarding (see [Configure your model provider](#configure-your-model-provider)). Once done, set `commands.bash` to `false` in the config so a compromised UI cannot run commands in the container. Questions and diagnosis still work through [`/openclaw`](https://docs.openclaw.ai/cli/openclaw); repairs need `/bash`.
 
 ## Troubleshooting
 
-- **A provider or its models don't appear after you set them up.** Confirm the plugin is enabled and the key is set (see [Configure your model provider](#configure-your-model-provider)), then restart the app from the Hyperlift manager. If it still misbehaves, run `/bash openclaw doctor --fix` from the web chat — or `/crestodian doctor fix` (then `/crestodian yes`) if you've turned `/bash` off — to repair common configuration problems.
+- **A provider or its models don't appear after you set them up.** Confirm the plugin is enabled and the key is set (see [Configure your model provider](#configure-your-model-provider)), then restart the app from the Hyperlift manager. If it still misbehaves, run `/bash openclaw doctor --fix` from the web chat to repair common configuration problems. (`/openclaw doctor` gives a read-only diagnosis, but repairs refuse to run from the chat — if you've turned `/bash` off, re-enable it first.)
 - **Git sync is not working.** Check the container logs. The most common causes are an expired PAT, an SSH-form URL instead of HTTPS, or a PAT missing **Contents: read and write**. If the remote cannot be reached, the container falls back to local-only mode and keeps running.
-- **The CLI reports `protocol error`.** The CLI and gateway versions differ — install the version this template pins (see [Connect the OpenClaw CLI](#connect-the-openclaw-cli)).
-- **The CLI reports `pairing required` or `scope upgrade pending`.** Approve the device in the control UI under **Nodes → Devices**.
+- **The CLI reports `protocol mismatch`.** The CLI and gateway versions differ — install the version this template pins (see [Connect the OpenClaw CLI](#connect-the-openclaw-cli)).
+- **The CLI reports `scope upgrade pending`.** Approve the device in the control UI under **Settings → Connections → Devices**. (A plain `pairing required` clears itself within a few seconds via `device-autopair` — just retry.)
 - **A plugin/skill/config change made via the CLI doesn't show up in the deployment.** Install- and config-type commands act on the machine running the CLI, not the remote gateway. See [Remote CLI limitations](#remote-cli-limitations).
 - **`openclaw dashboard` or `openclaw gateway status` reports the gateway is not running.** Both check for a gateway on the local machine. Use `openclaw health` to check the deployment.
 - **Something installed in the `Dockerfile` is missing at runtime.** If the build wrote it under `/home/node` (plugins, skills, caches), the persistent volume mounts over it — install it after boot instead. See [Persistent storage](#persistent-storage).
-- **The app restarts or runs out of memory (`OOMKilled`).** This template disables the Codex plugin (`plugins.entries.codex.enabled: false` in `seed/openclaw.default.json`). OpenAI models on the official API otherwise route to OpenAI's *Codex* runtime, which runs the agent in a separate app-server and spawns a full helper process per tool call — enough to exhaust a medium instance. Disabling it makes OpenAI models fall back to OpenClaw's lighter built-in runtime; non-OpenAI models are unaffected. Re-enable codex only if you want its agentic/code-execution features and have given the app more memory.
+- **The app restarts or runs out of memory (`OOMKilled`).** This template disables the Codex plugin (`plugins.entries.codex.enabled: false`) and pins OpenAI models to OpenClaw's lighter built-in runtime (`models.providers.openai.agentRuntime.id: "openclaw"` in `seed/openclaw.default.json`). Without the pin, OpenAI models on the official API route to OpenAI's *Codex* runtime, which runs the agent in a separate app-server and spawns a full helper process per tool call — enough to exhaust a medium instance. And with the plugin disabled but the pin missing, OpenAI models fail outright with `runtime "codex" is unavailable`, so keep the two settings together. Non-OpenAI models are unaffected. Re-enable codex (and remove the pin) only if you want its agentic/code-execution features and have given the app more memory.
 
 ## License
 
