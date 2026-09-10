@@ -76,7 +76,7 @@ Almost everything about the deployment lives in `openclaw.json` — the model, e
 |---|---|---|
 | **Ask the agent** | Plain language in the web chat | The simplest and most common approach — say what you want ("enable the Cerebras plugin", "switch to model X", "add a skill for Y") and the agent edits `openclaw.json` and applies it for you. It runs inside the container, so it can't set Hyperlift env vars — add API keys there yourself. |
 | **Control UI — raw config editor** | **Settings → System → Advanced** in the gateway, then switch the editor to **Raw** | Editing `openclaw.json` by hand from the browser; nothing to install. Reveal the redacted values with the eye button before editing, then **Save**. |
-| **`/bash` in the web chat** | Type `/bash openclaw …` in the chat | Running OpenClaw commands inside the container yourself — `onboard`, `plugins enable`, `config set`. They take effect on the deployment. |
+| **`/bash` in the web chat** | Type `/bash openclaw …` in the chat | Running OpenClaw commands inside the container yourself — `onboard`, `plugins enable`, `config set`. They take effect immediately. |
 | **Git-sync branch** | The `workspace-sync` branch, edited from your machine | Versioned, off-cluster edits to `openclaw.json` and workspace files. Requires [git sync](#git-sync-optional). |
 | **Remote CLI** | The `openclaw` CLI on your machine | *Operating* the gateway (health, logs, messaging) — **not** config: `config`/`plugins`/`onboard` run locally, not on the deployment. See [Remote CLI limitations](#remote-cli-limitations). |
 
